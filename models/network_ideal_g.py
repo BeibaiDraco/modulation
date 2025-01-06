@@ -187,6 +187,7 @@ noise = np.random.uniform(-0.1, 0.1, N)
 # 3. Assign gain factors based on the nonlinear mapping
 #g_vector = 1.0 +  0.10* f_values + np.random.uniform(-0.008, 0.008, N)
 g_vector = 1.0 +  0.15* f_values
+
 G = np.diag(g_vector)  # Diagonal matrix of gains
 
 # Precompute (I - G W_R) and its inverse
@@ -249,25 +250,6 @@ for neuron_idx in range(N):
 
 
 # PCA Visualization
-def create_response_visualization(responses_list, titles, shape_data, color_data):
-    fig = plt.figure(figsize=(15, 4 * len(responses_list)))
-    pca = PCA(n_components=2)
-    pca.fit(responses_list[0])
-
-    all_pca_data = np.vstack([pca.transform(resp) for resp in responses_list])
-    x_min, x_max = all_pca_data[:, 0].min(), all_pca_data[:, 0].max()
-    y_min, y_max = all_pca_data[:, 1].min(), all_pca_data[:, 1].max()
-
-    for row, (response_data, title) in enumerate(zip(responses_list, titles)):
-        responses_pca = pca.transform(response_data)
-        ax1 = fig.add_subplot(len(responses_list), 1, row + 1)
-        scatter = ax1.scatter(responses_pca[:, 0], responses_pca[:, 1], c=shape_data, cmap='autumn', label='Shape')
-        scatter = ax1.scatter(responses_pca[:, 0], responses_pca[:, 1], c=color_data, cmap='winter', label='Color')
-        ax1.set_title(title)
-        ax1.set_xlim(x_min, x_max)
-        ax1.set_ylim(y_min, y_max)
-    plt.tight_layout()
-    plt.show()
 
 # Visualizations
 def visualize_neuron_selectivity(shape_selectivity, color_selectivity, neurons_enhance, neurons_suppress):
