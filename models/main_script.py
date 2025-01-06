@@ -18,6 +18,9 @@ from my_network import (
     visualize_four_subplots_3d,
     generate_external_noise_in_third_pc,
     plot_3d_pca_grid_and_external_noise,
+    identify_dominant_neurons_for_rotation,
+    plot_dominant_neurons,
+    analyze_axis_rotation_in_pca
 )
 
 def main():
@@ -78,7 +81,7 @@ def main():
     # -------------------------------------------------
     # Suppose we want color dimension to be pushed more into PC3
     # We'll do a small example with the UNTUNED matrix
-    responses_grid_mod_pc3 = compute_modulated_responses_pc3(
+    responses_grid_mod_pc3,g_vector = compute_modulated_responses_pc3(
         W_R_untuned,
         W_F,
         S,
@@ -146,6 +149,92 @@ def main():
     plt.colorbar(sc, ax=ax2, label="S[:,1] - S[:,0]")
     plt.tight_layout()
     plt.show()
+    
+
+    G = np.diag(g_vector)
+
+    # 2) Identify rotation changes
+    shape_diff, color_diff = identify_dominant_neurons_for_rotation(W_R_untuned, W_F, G)
+
+    # 3) Plot or analyze the top-changed neurons
+    plot_dominant_neurons(shape_diff, color_diff, top_k=20)
+    
+        # Suppose we pick a single stimulus (or an average over a set of stimuli).
+    # For demonstration, let's pick shape=0.0, color=1.0 as an example "pure color" stimulus:
+
+    # 1) Identify the index for that stimulus:
+    stim_index_color1 = np.where((stimuli_grid[:,0]==0.0) & (stimuli_grid[:,1]==1.0))[0]
+    # (Assumes you have shape_stimuli and color_stimuli that contain exactly 0.0 and 1.0)
+
+    # 2) Extract the 300D firing for that stimulus, unmod vs mod
+    x_unmod = responses_grid_unmod[stim_index_color1[0]]  # shape (N,)
+    x_mod   = responses_grid_mod_pc3[stim_index_color1[0]]  # shape (N,)
+
+    # 3) Compute the difference in raw space
+    delta_x = x_mod - x_unmod  # shape (N,)
+
+    # 4) Project both unmod and mod into PCA space
+    z_unmod = pca_grid_again.transform(x_unmod.reshape(1,-1))  # shape (1,3)
+    z_mod   = pca_grid_again.transform(x_mod.reshape(1,-1))    # shape (1,3)
+    delta_z = (z_mod - z_unmod)[0]   # shape (3,)
+
+    # 5) The PCA components matrix is pca_grid_again.components_, shape (3, N).
+    #    But we often handle the transposed version to get U[i, :] for each neuron i.
+
+    U = pca_grid_again.components_.T  # shape (N,3)
+
+    # 6) Now let's define "per-neuron contribution in PCA space" as:
+    #    delta_z_i = delta_x[i] * U[i,:]
+    #    We can store these in an (N,3) array:
+
+    delta_z_per_neuron = np.zeros((x_unmod.shape[0], 3))
+    for i in range(x_unmod.shape[0]):
+        delta_z_per_neuron[i,:] = delta_x[i] * U[i,:]
+
+    # 7) If you want a single scalar measure of magnitude:
+    contrib_magnitude = np.linalg.norm(delta_z_per_neuron, axis=1)  # shape (N,)
+
+    # 8) Plot or analyze correlation with g_vector[i]
+    # Suppose g_vector is shape (N,). We can scatter:
+    plt.figure(figsize=(8,6))
+    plt.scatter(g_vector, contrib_magnitude, alpha=0.5)
+    plt.xlabel("g_vector[i]")
+    plt.ylabel("Norm of neuron i's contribution in PCA space")
+    plt.title("Per-Neuron Contribution in PCA Space vs. Gain")
+    plt.grid(True)
+    plt.show()
+
+    # 9) You can also check shape or color selectivity S[:,1]-S[:,0]:
+    selectivity_diff = S[:,1] - S[:,0]
+    plt.figure(figsize=(8,6))
+    plt.scatter(selectivity_diff, contrib_magnitude, alpha=0.5)
+    plt.xlabel("selectivity_diff (color - shape)")
+    plt.ylabel("Norm of i's PCA contribution")
+    plt.title("Per-Neuron PCA Contribution vs. Selectivity")
+    plt.grid(True)
+    plt.show()
+    
+    # 1) Suppose you have pca_grid_again fitted on responses_grid_unmod
+    # 2) Suppose you define your G = np.diag(g_vector) already
+
+    results = analyze_axis_rotation_in_pca(W_R_untuned, W_F, G, pca_grid_again)
+
+    shape_contrib_mag = results["shape_contrib_mag"]  # shape (N,)
+    color_contrib_mag = results["color_contrib_mag"]  # shape (N,)
+
+    # e.g., correlation with g_vector
+    plt.figure(figsize=(8,6))
+    plt.scatter(g_vector, shape_contrib_mag, alpha=0.5, color='blue', label='Shape Contribution')
+    plt.scatter(g_vector, color_contrib_mag, alpha=0.5, color='red',  label='Color Contribution')
+    plt.xlabel("g_vector[i]")
+    plt.ylabel("Contribution magnitude in PCA space")
+    plt.title("Neuron-by-Neuron Contribution vs. Gain Factor")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+
 
 
     print("All done!")
