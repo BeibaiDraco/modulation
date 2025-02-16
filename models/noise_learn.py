@@ -6,14 +6,14 @@ from sklearn.decomposition import PCA
 # Parameters
 # -------------------------
 np.random.seed(15)
-N = 400
+N = 800
 K = 2  # shape=0, color=1
-num_stimuli = 20
+num_stimuli = 29
 num_noise_trials = 50
 noise_level = 0.05
 desired_radius = 0.9
 p_high = 0.2
-p_low = 0.03
+p_low = 0.2
 
 # -------------------------------------------------
 # 1) Initialization
@@ -198,7 +198,7 @@ def visualize_four_subplots_with_axis(
                 c=np.linspace(0,1,len(line_shp_un)), cmap='autumn', s=40, alpha=0.8, label='Unmod ShapeLine')
     ax1.arrow(line_shp_un[0,0], line_shp_un[0,1],
               axis_shp_un[0], axis_shp_un[1], head_width=0.05, color='red')
-    ax1.set_aspect('equal', adjustable='box')
+    #ax1.set_aspect('equal', adjustable='box')
     txt_shp_un = f"Unmod shape axis angle: {angle_shp_un:.2f}°"
 
     # Subplot 2: Unmod Noise PCA
@@ -210,25 +210,25 @@ def visualize_four_subplots_with_axis(
     ax2.scatter(noise_unmod_2d_innoise[:,0], noise_unmod_2d_innoise[:,1],
                 c='gray', alpha=0.3, s=10, label='Unmod Noise')
     ax2.scatter(grid_unmod_2d_innoise[:,0], grid_unmod_2d_innoise[:,1],
-                c=stimuli_grid[:,1], cmap='winter', s=30, alpha=0.8, label='Unmod Grid')
+                c=stimuli_grid[:,1], cmap='spring', s=30, alpha=0.8, label='Unmod Grid')
     ax2.set_title("Unmod – PCA from Noise")
     ax2.set_xlabel("PC1")
     ax2.set_ylabel("PC2")
     ax2.grid(True)
-    ax2.set_aspect('equal', adjustable='box')
+    #ax2.set_aspect('equal', adjustable='box')
     ax2.legend()
 
     # Subplot 3: Modulated Grid PCA
     ax3 = axes[1,0]
     ax3.scatter(grid_mod_2d[:,0], grid_mod_2d[:,1],
-                c=stimuli_grid[:,1], cmap='spring', s=30, alpha=0.8, label='Mod Grid')
+                c=stimuli_grid[:,1], cmap='winter', s=30, alpha=0.8, label='Mod Grid')
     ax3.scatter(noise_mod_2d[:,0], noise_mod_2d[:,1],
                 c='gray', alpha=0.3, s=10, label='Mod Noise')
     ax3.set_title("Mod – PCA from Grid")
     ax3.set_xlabel("PC1")
     ax3.set_ylabel("PC2")
     ax3.grid(True)
-    ax3.set_aspect('equal', adjustable='box')
+    #ax3.set_aspect('equal', adjustable='box')
     ax3.legend()
 
     angle_col_mod, axis_col_mod, line_col_mod = measure_axis_in_pca(pca_grid, color_line_mod)
@@ -258,7 +258,7 @@ def visualize_four_subplots_with_axis(
     ax4.set_xlabel("PC1")
     ax4.set_ylabel("PC2")
     ax4.grid(True)
-    ax4.set_aspect('equal', adjustable='box')
+    #ax4.set_aspect('equal', adjustable='box')
     ax4.legend()
 
     plt.tight_layout()
@@ -394,8 +394,8 @@ if __name__=="__main__":
     responses_grid_mod_strict, g_vector_strict, dcolor_strict, delta_g_raw = compute_modulated_responses_strict_pc1(
         W_R_untuned, W_F, S, stimuli_grid,
         responses_grid_unmod, pca_full,
-        alpha=1.0,      # you can try smaller alpha if clamping is triggered
-        clamp_range=(0.8, 1.2)
+        alpha=0.8,      # you can try smaller alpha if clamping is triggered
+        clamp_range=(0.0, 2.0)
     )
     # we won't modify the noise: we'll assume the same input noise
     responses_noise_mod_strict = responses_noise_unmod.copy()
