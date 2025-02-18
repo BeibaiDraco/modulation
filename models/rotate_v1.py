@@ -1,3 +1,14 @@
+## rotate v1 model
+## Here 
+#\[
+#\min_{\mathbf{\delta g}} \;
+#\|\mathbf{\delta g}\|^2
+#\quad\text{subject to}\quad
+#\mathbf{v}_j^\top
+#\bigl(\mathbf{G}\,\mathbf{d}_{\mathrm{color}}\bigr)
+#=0 \;\;(j=2,\dots,N).
+#\]
+
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -6,14 +17,14 @@ from sklearn.decomposition import PCA
 # Parameters
 # -------------------------
 np.random.seed(15)
-N = 1000
+N = 800
 K = 2  # shape=0, color=1
-num_stimuli = 10
+num_stimuli = 29
 num_noise_trials = 50
 noise_level = 0.05
 desired_radius = 0.9
 p_high = 0.2
-p_low = 0.03
+p_low = 0.2
 
 # -------------------------------------------------
 # 1) Initialization
@@ -46,7 +57,7 @@ def initialize_W_F(S):
 
 def initialize_W_R(N, p_high, p_low, S, WR_tuned=False, desired_radius=0.9):
     """
-    Build a recurrent matrix with four blocks and scale it.
+    Build a recurrent matrix with four blocks and scale it to have max eigenvalue near desired_radius.
     """
     W_R = np.zeros((N, N))
     halfN = N // 2
@@ -78,10 +89,11 @@ def initialize_W_R(N, p_high, p_low, S, WR_tuned=False, desired_radius=0.9):
     max_ev = np.max(np.abs(eivals))
     if max_ev > 0:
         W_R *= (desired_radius / max_ev)
+    
     return W_R
 
 # -------------------------------------------------
-# 2) Response Computations
+# 2) Basic Response Computation
 # -------------------------------------------------
 def compute_responses(W_F, W_R, shape_stimuli, color_stimuli):
     shape_vals = np.array(shape_stimuli)
@@ -104,7 +116,7 @@ def generate_noisy_responses(W_R, noise_level, stimuli_grid, num_noise_trials):
     return np.array(noise)
 
 # -------------------------------------------------
-# 3) Axis Lines
+# 3) Helper: Build Color/Shape Lines
 # -------------------------------------------------
 def compute_color_line(W_R, W_F, shape_val, color_vals, g_vector=None):
     N = W_R.shape[0]
@@ -139,13 +151,17 @@ def compute_shape_line(W_R, W_F, shape_vals, color_val, g_vector=None):
     return np.array(out)
 
 def measure_axis_in_pca(pca_model, line_data):
+    """
+    Return the angle of a line in PCA(PC1,PC2) space,
+    plus the axis vector and the PCA-projected line.
+    """
     line_2d = pca_model.transform(line_data)
     axis_vec = line_2d[-1] - line_2d[0]
     angle = np.arctan2(np.abs(axis_vec[1]), np.abs(axis_vec[0]))
     return np.degrees(angle), axis_vec, line_2d
 
 # -------------------------------------------------
-# 4) Visualization
+# 4) Visualization with Axis Overlays
 # -------------------------------------------------
 def visualize_four_subplots_with_axis(
     responses_grid_unmod,
@@ -162,6 +178,7 @@ def visualize_four_subplots_with_axis(
     fig, axes = plt.subplots(2,2, figsize=(14,10))
     fig.suptitle(title_main, fontsize=16)
 
+    # PCA on unmodulated grid
     pca_grid = PCA(n_components=2)
     pca_grid.fit(responses_grid_unmod)
     grid_unmod_2d = pca_grid.transform(responses_grid_unmod)
@@ -193,6 +210,7 @@ def visualize_four_subplots_with_axis(
                 c=np.linspace(0,1,len(line_shp_un)), cmap='autumn', s=40, alpha=0.8, label='Unmod ShapeLine')
     ax1.arrow(line_shp_un[0,0], line_shp_un[0,1],
               axis_shp_un[0], axis_shp_un[1], head_width=0.05, color='red')
+    #ax1.set_aspect('equal', adjustable='box')
     txt_shp_un = f"Unmod shape axis angle: {angle_shp_un:.2f}°"
 
     # Subplot 2: Unmod Noise PCA
@@ -204,17 +222,18 @@ def visualize_four_subplots_with_axis(
     ax2.scatter(noise_unmod_2d_innoise[:,0], noise_unmod_2d_innoise[:,1],
                 c='gray', alpha=0.3, s=10, label='Unmod Noise')
     ax2.scatter(grid_unmod_2d_innoise[:,0], grid_unmod_2d_innoise[:,1],
-                c=stimuli_grid[:,1], cmap='winter', s=30, alpha=0.8, label='Unmod Grid')
+                c=stimuli_grid[:,1], cmap='spring', s=30, alpha=0.8, label='Unmod Grid')
     ax2.set_title("Unmod – PCA from Noise")
     ax2.set_xlabel("PC1")
     ax2.set_ylabel("PC2")
     ax2.grid(True)
+    #ax2.set_aspect('equal', adjustable='box')
     ax2.legend()
 
     # Subplot 3: Modulated Grid PCA
     ax3 = axes[1,0]
     ax3.scatter(grid_mod_2d[:,0], grid_mod_2d[:,1],
-                c=stimuli_grid[:,1], cmap='spring', s=30, alpha=0.8, label='Mod Grid')
+                c=stimuli_grid[:,1], cmap='winter', s=30, alpha=0.8, label='Mod Grid')
     ax3.scatter(noise_mod_2d[:,0], noise_mod_2d[:,1],
                 c='gray', alpha=0.3, s=10, label='Mod Noise')
     ax3.set_title("Mod – PCA from Grid")
@@ -267,164 +286,103 @@ def visualize_four_subplots_with_axis(
     print(f"Shape Axis Angle Diff: {dshp:.2f}° (positive => mod shape axis more aligned w/ PC1)")
 
 
-# ============== New "Small-Gain" Modulation with Automatic Testing ====================
-def compute_modulated_responses_pc1_small_gain_auto(
-    W_R, W_F, S, stimuli_grid, pc1,
-    pca_unmod_grid,   # PCA fitted on unmod grid
-    color_line_unmod, # unmod color line data
-    angle_tolerance=0.5,
-    max_iter=15,
-    alpha_init=0.05,
-    alpha_step=0.05,
-    gamma_init=0.1,
-    gamma_step=0.05
+# -------------------------------------------------
+# 5) The Strict PC1-Alignment Strategy
+# -------------------------------------------------
+def solve_delta_g_for_color_axis(dcolor, eigvecs):
+    """
+    Solve for delta_g such that (I + diag(delta_g)) dcolor
+    is parallel to eigvecs[:, 0] (which is v1).
+    Equivalently, for j>=1, v_j^T((I + diag(delta_g)) dcolor) = 0.
+    We skip j=0 (the top PC1) because we *allow* overlap with v1
+    but remove overlap from v2..vN.
+
+    The matrix 'M' arises from the condition:
+       for j>=1:   v_j^T dcolor + v_j^T diag(delta_g) dcolor = 0
+                   a_j + sum_i delta_g[i] * v_j[i] * dcolor[i] = 0
+    => M[j-1, i] = v_j[i] * dcolor[i],  and  RHS[j-1] = -a_j
+
+    Return the minimal-norm delta_g via least-squares solution.
+    """
+    N = len(dcolor)
+    # Coeffs a_j = v_j^T dcolor
+    a = eigvecs.T @ dcolor  # shape (N,)
+    # Build M from j=1..(N-1)
+    rows = []
+    rhs = []
+    for j in range(1, N):  # j=1..N-1
+        row_j = eigvecs[:, j] * dcolor  # elementwise product => length N
+        rows.append(row_j)
+        rhs.append(-a[j])
+    M = np.vstack(rows)        # shape ((N-1), N)
+    rhs = np.array(rhs)        # shape (N-1,)
+
+    # solve minimal ||delta_g||^2 s.t. M delta_g = rhs
+    delta_g, residuals, rank, svals = np.linalg.lstsq(M, rhs, rcond=None)
+    return delta_g
+
+def compute_modulated_responses_strict_pc1(
+    W_R, W_F, S, stimuli_grid,
+    responses_grid_unmod,  # to define color axis
+    pca_full,              # full PCA object with all components
+    alpha=1.0, clamp_range=(0.8,1.2)
 ):
     """
-    We attempt a small-gain push/pull that rotates color axis to PC1.
-    We'll iteratively adjust alpha,gamma in small steps until
-    color axis angle is improved by at least 'angle_tolerance' degrees.
-    or we do max_iter steps.
-
-    Gains in [0.8..1.2].
-
-    Return final (responses_mod, g_vector, angle_col_mod).
+    1) Define color axis dcolor as difference in average response 
+       between color=1.0 and color=0.0 (averaged over shape).
+    2) Solve for delta_g that kills components in v2..vN.
+    3) Scale by alpha, clamp, and build G. 
+    4) Compute modded responses.
     """
+    # 1) Build a "color axis" from data. E.g. difference of average responses: color=1 minus color=0
+    #    We'll average over shape in [0..1].
+    shape_vals = np.linspace(0,1, num_stimuli)
+    # responses_grid_unmod has length num_stimuli^2
+    # we want to find those stimuli with color ~0 and color ~1.
+    # We'll pick color=0 index and color=1 index exactly:
+    stimuli_grid_reshaped = stimuli_grid.reshape(num_stimuli, num_stimuli, 2)
+    # gather all responses where color=0 => col idx=0
+    color0_indices = np.where(np.isclose(stimuli_grid[:,1], 0.0))[0]
+    color1_indices = np.where(np.isclose(stimuli_grid[:,1], 1.0))[0]
+    # average
+    resp_color0 = np.mean(responses_grid_unmod[color0_indices], axis=0)  # shape (N,)
+    resp_color1 = np.mean(responses_grid_unmod[color1_indices], axis=0)  # shape (N,)
+    dcolor = resp_color1 - resp_color0   # shape (N,)
+    # optional normalization
+    dcolor /= (np.linalg.norm(dcolor) + 1e-9)
 
-    def small_gain_function(W_R, W_F, S, stimuli_grid, pc1, alpha, gamma):
-        """
-        Gains:
-          color_ratio = S[i,1]/(S[i,0]+S[i,1]+eps)
-          shape_ratio = S[i,0]/(S[i,0]+S[i,1]+eps)
-          overlap_pc1 = abs(pc1_unit[i]) => [0..1]
-          g[i] = 1 + alpha*(color_ratio*overlap) - gamma*(shape_ratio*overlap)
-          then clip to [0.8..1.2]
-        """
-        eps = 1e-9
-        N = W_R.shape[0]
-        pc1_unit = pc1/(np.linalg.norm(pc1)+eps)
+    # 2) Extract all PCA eigenvectors from pca_full
+    #    pca_full.components_ shape => (N, N) if we fit n_components=N
+    #    each row is an eigenvector in sklearn => we want columns => we'll transpose
+    eigvecs = pca_full.components_.T  # shape (N,N), columns = v_j
+    # We'll solve for delta_g s.t. G*dcolor is parallel to v1 => v2..vN comp=0
+    delta_g_raw = solve_delta_g_for_color_axis(dcolor, eigvecs)
 
-        color_part = np.maximum(S[:,1],0.0)
-        shape_part = np.maximum(S[:,0],0.0)
-        denom = color_part+shape_part+eps
-        color_ratio = color_part/denom
-        shape_ratio = shape_part/denom
+    # 3) Apply a scale alpha, then clamp in [0.8,1.2] around 1.0
+    #    Gains = 1.0 + alpha * delta_g_raw
+    delta_scaled = alpha * delta_g_raw
+    gains = 1.0 + delta_scaled
+    gains_clamped = np.clip(gains, clamp_range[0], clamp_range[1])
 
-        overlap = np.abs(pc1_unit)
-        overlap/= (overlap.max()+eps)
+    # 4) Build G, compute final responses
+    G = np.diag(gains_clamped)
+    I_minus = np.eye(N) - G @ W_R
+    condVal = np.linalg.cond(I_minus)
+    if condVal > 1/np.finfo(I_minus.dtype).eps:
+        raise ValueError("(I - G*W_R) nearly singular. Reduce alpha or check network.")
+    inv_mat = np.linalg.inv(I_minus)
+    GW_F = G @ W_F
 
-        raw_g = 1.0 - alpha*(color_ratio*overlap) + gamma*(shape_ratio*overlap)
-        # Suppose pc1_unit has real sign for each neuron i
-        # Then:
-        #raw_g = 1.0 + alpha_color * color_ratio * pc1_unit + alpha_shape * shape_ratio * pc1_unit
+    out = []
+    for (sh, co) in stimuli_grid:
+        F = np.array([sh, co])
+        out.append(inv_mat @ (GW_F @ F))
+    out = np.array(out)
 
-        g_clipped = np.clip(raw_g,0.8,1.2)
-
-        G = np.diag(g_clipped)
-        A = np.eye(N) - G@W_R
-        condA = np.linalg.cond(A)
-        if condA>1/np.finfo(A.dtype).eps:
-            raise ValueError("Nearly singular. Lower alpha/gamma or adjust clipping.")
-        invA = np.linalg.inv(A)
-        G_WF = G@W_F
-
-        mod_resp = []
-        for (sh,co) in stimuli_grid:
-            F = np.array([sh,co])
-            mod_resp.append(invA@(G_WF@F))
-        return np.array(mod_resp), g_clipped
-    
-    
-    def small_gain_function(W_R, W_F, S, stimuli_grid, pc1, alpha_color, alpha_shape):
-        """
-    Gains:
-      color_ratio = S[i,1] / (S[i,0] + S[i,1] + eps)
-      shape_ratio = S[i,0] / (S[i,0] + S[i,1] + eps)
-      For each neuron i:
-        pc1_unit[i] = pc1[i] / ||pc1||
-        raw_g[i] = 1.0 + alpha_color * color_ratio[i] * pc1_unit[i] 
-                         + alpha_shape * shape_ratio[i] * pc1_unit[i]
-      and clip to [0.8, 1.2].
-    """
-        eps = 1e-9
-        N = W_R.shape[0]
-        pc1_unit = pc1 / (np.linalg.norm(pc1) + eps)
-
-        color_part = np.maximum(S[:, 1], 0.0)
-        shape_part = np.maximum(S[:, 0], 0.0)
-        denom = color_part + shape_part + eps
-        color_ratio = color_part / denom
-        shape_ratio = shape_part / denom
-
-        raw_g = 1.0 + alpha_color * color_ratio * pc1_unit + alpha_shape * shape_ratio * pc1_unit
-        g_clipped = np.clip(raw_g, 0.8, 1.2)
-
-        G = np.diag(g_clipped)
-        A = np.eye(N) - G @ W_R
-        condA = np.linalg.cond(A)
-        if condA > 1 / np.finfo(A.dtype).eps:
-            raise ValueError("Nearly singular. Lower alpha_color/alpha_shape or adjust clipping.")
-        invA = np.linalg.inv(A)
-        G_WF = G @ W_F
-
-        mod_resp = []
-        for (sh, co) in stimuli_grid:
-            F = np.array([sh, co])
-            mod_resp.append(invA @ (G_WF @ F))
-        mod_resp = np.array(mod_resp)
-        return mod_resp, g_clipped
-
-
-    # measure unmod color angle
-    angle_col_un,_,_ = measure_axis_in_pca(pca_unmod_grid, color_line_unmod)
-
-    alpha = alpha_init
-    gamma = gamma_init
-    best_resps = None
-    best_g = None
-    best_angle_col_mod = 999.0
-    iteration=0
-
-    while iteration<max_iter:
-        iteration+=1
-        try:
-            resp_try, g_try = small_gain_function(W_R, W_F, S, stimuli_grid, pc1, alpha, gamma)
-        except ValueError:
-            # if singular, we skip
-            print(f"Singular at alpha={alpha}, gamma={gamma}, skipping..")
-            alpha+=alpha_step
-            continue
-
-        # measure color line angle
-        color_line_mod_try = compute_color_line(W_R, W_F, 0.0, np.linspace(0,1,10), g_try)
-        angle_col_mod_try,_,_ = measure_axis_in_pca(pca_unmod_grid, color_line_mod_try)
-
-        improvement = angle_col_un - angle_col_mod_try
-        print(f"Iter={iteration}, alpha={alpha:.3f}, gamma={gamma:.3f}, colorAngle={angle_col_mod_try:.2f}, improvement={improvement:.2f}")
-
-        if improvement>angle_tolerance:
-            # success
-            best_resps=resp_try
-            best_g=g_try
-            best_angle_col_mod=angle_col_mod_try
-            print("Requirement met! color axis improved by more than angle_tolerance.")
-            break
-        else:
-            # increment alpha,gamma slightly
-            alpha+=alpha_step
-            gamma+=gamma_step
-
-    if best_resps is None:
-        # final attempt
-        print("Could not find suitable small gain that improves color axis angle enough.")
-        # we at least return the last attempt
-        best_resps=resp_try
-        best_g=g_try
-        best_angle_col_mod=angle_col_mod_try
-
-    return best_resps,best_g,best_angle_col_mod
+    return out, gains_clamped, dcolor, delta_g_raw
 
 # -------------------------------------------------
-# 8) MAIN
+# 6) Main
 # -------------------------------------------------
 if __name__=="__main__":
     # 1) Setup
@@ -438,53 +396,45 @@ if __name__=="__main__":
     responses_grid_unmod, stimuli_grid = compute_responses(W_F, W_R_untuned, shape_vals, color_vals)
     responses_noise_unmod = generate_noisy_responses(W_R_untuned, noise_level, stimuli_grid, num_noise_trials)
 
-    # 3) Fit 2D PCA on unmod, get pc1; flip if needed to ensure dot>0 w/ pure color
-    pca_2 = PCA(n_components=2)
-    pca_2.fit(responses_grid_unmod)
-    pc1 = pca_2.components_[0].copy()
+    # 3) PCA for visualization is only 2D, but we need full PCA for all eigenvectors.
+    #    We'll do a separate fit with n_components = N (or as large as feasible).
+    #    This can be big for N=1000, but is doable offline.
+    pca_full = PCA(n_components=min(N, responses_grid_unmod.shape[0]))  # can be up to N
+    pca_full.fit(responses_grid_unmod)
 
-    x_color_pure = np.linalg.inv(np.eye(N)-W_R_untuned) @ (W_F @ np.array([0.0,1.0]))
-    if np.dot(pc1, x_color_pure)<0:
-        pc1=-pc1
-
-    # 4) Build unmod color/shape lines & measure angles
-    color_line_vals = np.linspace(0,1,10)
-    color_line_unmod= compute_color_line(W_R_untuned, W_F, 0.0, color_line_vals, g_vector=None)
-    shape_line_vals = np.linspace(0,1,10)
-    shape_line_unmod= compute_shape_line(W_R_untuned, W_F, shape_line_vals, 0.0, g_vector=None)
-
-    # 5) Attempt a small-gain push/pull that meets a certain angle improvement
-    angle_tolerance=3.0  # want color axis angle improved by at least 0.5 deg
-    responses_grid_mod_auto,g_vector_auto,angle_col_mod_auto = compute_modulated_responses_pc1_small_gain_auto(
-        W_R_untuned, W_F, S, stimuli_grid, pc1,
-        pca_unmod_grid=pca_2, 
-        color_line_unmod=color_line_unmod,
-        angle_tolerance=angle_tolerance,
-        max_iter=1000,
-        alpha_init=3.650,
-        alpha_step=0.05,
-        gamma_init=2.260,
-        gamma_step=0.03
+    # 4) Strict PC1-based modulation with small alpha
+    responses_grid_mod_strict, g_vector_strict, dcolor_strict, delta_g_raw = compute_modulated_responses_strict_pc1(
+        W_R_untuned, W_F, S, stimuli_grid,
+        responses_grid_unmod, pca_full,
+        alpha=0.8,      # you can try smaller alpha if clamping is triggered
+        clamp_range=(0.0, 2.0)
     )
+    # we won't modify the noise: we'll assume the same input noise
+    responses_noise_mod_strict = responses_noise_unmod.copy()
 
-    responses_noise_mod_auto= responses_noise_unmod.copy()
+    print("[Main] Gains stats:")
+    print(f"  min(g)={g_vector_strict.min():.3f}, max(g)={g_vector_strict.max():.3f}, mean(g)={g_vector_strict.mean():.3f}")
 
-    # lines w/ final g_vector
-    color_line_mod_auto= compute_color_line(W_R_untuned, W_F, 0.0, color_line_vals, g_vector_auto)
-    shape_line_mod_auto= compute_shape_line(W_R_untuned, W_F, shape_line_vals, 0.0, g_vector_auto)
+    # 5) Axis lines for unmod vs mod
+    color_line_vals = np.linspace(0, 1, 10)
+    color_line_unmod = compute_color_line(W_R_untuned, W_F, 0.0, color_line_vals, g_vector=None)
+    color_line_mod = compute_color_line(W_R_untuned, W_F, 0.0, color_line_vals, g_vector_strict)
+    shape_line_vals = np.linspace(0, 1, 10)
+    shape_line_unmod = compute_shape_line(W_R_untuned, W_F, shape_line_vals, 0.0, g_vector=None)
+    shape_line_mod = compute_shape_line(W_R_untuned, W_F, shape_line_vals, 0.0, g_vector_strict)
 
-    # 6) visualize
+    # 6) Visualize
     visualize_four_subplots_with_axis(
         responses_grid_unmod,
         responses_noise_unmod,
-        responses_grid_mod_auto,
-        responses_noise_mod_auto,
+        responses_grid_mod_strict,
+        responses_noise_mod_strict,
         stimuli_grid,
         color_line_unmod,
-        color_line_mod_auto,
+        color_line_mod,
         shape_line_unmod,
-        shape_line_mod_auto,
-        title_main="Small-Gain PC1 Color Axis w/ Automatic Parameter Tuning"
+        shape_line_mod,
+        title_main="Strict PC1 Alignment – Small Diagonal Gain"
     )
 
-    print("All done!")
+    print("Done!")
