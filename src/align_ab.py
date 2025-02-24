@@ -5,12 +5,11 @@ from sklearn.decomposition import PCA
 from scipy.optimize import minimize
 
 np.random.seed(15)
-
 N = 100
 K = 2  # shape=0, color=1
 desired_radius = 0.9
 p_high = 0.2
-p_low  = 0.2
+p_low = 0.2
 
 # -------------------------------------------------
 # 1) Initialization
@@ -20,83 +19,48 @@ def initialize_selectivity_matrix(N, K):
     Half are shape-based, half are color-based, with a random distribution.
     """
     S = np.zeros((N, K))
-    halfN = N // 2
-
-    # For the first half: shape dimension random, then color is 0.5 - shape/2
-    S[:halfN, 0] = np.random.rand(halfN)
-    S[:halfN, 1] = 0.5 - S[:halfN, 0] / 2
-    neg_idx = (S[:halfN, 0] - S[:halfN, 1]) < 0
-    S[:halfN, 0][neg_idx] = np.random.uniform(0, 0.5, size=np.sum(neg_idx))
-
-    # The second half is the "complementary" assignment
-    S[halfN:, 1] = S[:halfN, 0]
-    S[halfN:, 0] = S[:halfN, 1]
-
+    S[:N//2, 0] = np.random.rand(N//2)
+    S[:N//2, 1] = 0.5 - S[:N//2, 0] / 2
+    neg_idx = (S[:N//2, 0] - S[:N//2, 1]) < 0
+    S[:N//2, 0][neg_idx] = np.random.uniform(0, 0.5, size=np.sum(neg_idx))
+    S[N//2:, 1] = S[:N//2, 0]
+    S[N//2:, 0] = S[:N//2, 1]
     return S
 
-def initialize_W_F(S, shape_scale=1.0, color_scale=1.0):
+def initialize_W_F(S):
     """
-    Scale shape vs. color input separately, then normalize each neuron’s feedforward.
+    W_F divides each neuron's (shape,color) by its sum.
     """
     W_F = np.zeros_like(S)
     for i in range(S.shape[0]):
-        s_val = shape_scale * S[i, 0]
-        c_val = color_scale * S[i, 1]
-        r = s_val + c_val
+        r = np.sum(S[i])
         if r > 0:
-            W_F[i, 0] = s_val / r
-            W_F[i, 1] = c_val / r
+            W_F[i] = S[i] / r
         else:
-            W_F[i] = [0, 0]
+            W_F[i] = S[i]
     return W_F
+
 def initialize_W_R(N, p_high, p_low, S, WR_tuned=False, desired_radius=0.9):
     """
-    Build a recurrent matrix with *symmetric* blocks, optionally enforce row-sums = 0,
-    optionally do distance-based scaling, and then fix the spectral radius.
+    Build a recurrent matrix with four blocks and scale it.
     """
-    halfN = N // 2
     W_R = np.zeros((N, N))
+    halfN = N // 2
 
-    # --- shape–shape block ---
-    rand_ss = np.random.rand(halfN, halfN)
-    mask_ss = rand_ss < p_high
-    block_ss = np.zeros((halfN, halfN))
-    block_ss[mask_ss] = np.random.rand(np.sum(mask_ss)) * 0.1
+    ss_mask = np.random.rand(halfN, halfN) < p_high
+    W_R[:halfN, :halfN][ss_mask] = np.random.rand(np.sum(ss_mask)) * 0.1
 
-    # Copy shape–shape block onto color–color block
-    W_R[:halfN, :halfN] = block_ss
-    W_R[halfN:, halfN:] = block_ss
+    sc_mask = np.random.rand(halfN, N - halfN) < p_low
+    W_R[:halfN, halfN:][sc_mask] = np.random.rand(np.sum(sc_mask)) * 0.1
 
-    # --- shape->color block ---
-    rand_sc = np.random.rand(halfN, halfN)
-    mask_sc = rand_sc < p_low
-    block_sc = np.zeros((halfN, halfN))
-    block_sc[mask_sc] = np.random.rand(np.sum(mask_sc)) * 0.1
+    cs_mask = np.random.rand(N - halfN, halfN) < p_low
+    W_R[halfN:, :halfN][cs_mask] = np.random.rand(np.sum(cs_mask)) * 0.1
 
-    # Copy shape->color block onto color->shape block
-    W_R[:halfN, halfN:] = block_sc
-    W_R[halfN:, :halfN] = block_sc
+    cc_mask = np.random.rand(N - halfN, N - halfN) < p_high
+    W_R[halfN:, halfN:][cc_mask] = np.random.rand(np.sum(cc_mask)) * 0.1
 
-    # Zero out self-connections first
     np.fill_diagonal(W_R, 0)
 
-    # -------------------------------------------------
-    # Enforce row-sums = 0 (a common way to remove
-    # the trivial "common firing rate" mode).
-    # -------------------------------------------------
-    for i in range(N):
-        row_sum = np.sum(W_R[i, :])
-        # Subtract (row_sum / N) from each column in row i
-        W_R[i, :] -= row_sum / N
-
-    # (Optional) Re-zero diagonal to strictly keep diag=0 
-    # if you want no self-connection at all:
-    np.fill_diagonal(W_R, 0)
-
-    # -------------------------------------------------
-    # Optionally apply distance-dependent tuning
-    # (and then you may want to re-zero the diagonal again).
-    # -------------------------------------------------
     if WR_tuned:
         thresh = 0.2
         for i in range(N):
@@ -104,21 +68,14 @@ def initialize_W_R(N, p_high, p_low, S, WR_tuned=False, desired_radius=0.9):
                 if i != j:
                     d = np.linalg.norm(S[i] - S[j])
                     if d < thresh:
-                        W_R[i, j] *= (2.0 - d / thresh)
+                        W_R[i, j] *= (2 - d / thresh)
 
-        # Re-zero diagonal once more (if desired)
-        np.fill_diagonal(W_R, 0)
-
-    # -------------------------------------------------
     # Rescale W_R so spectral radius = desired_radius
-    # -------------------------------------------------
     eivals = np.linalg.eigvals(W_R)
     max_ev = np.max(np.abs(eivals))
     if max_ev > 0:
         W_R *= (desired_radius / max_ev)
-
     return W_R
-
 
 # -------------------------------------------------
 # 2) Response Computations
@@ -166,7 +123,6 @@ if __name__ == "__main__":
     color_vals = np.linspace(0, 1, grid_points)
 
     # For coloring the grid in plots, we need to track the color param for each point
-    # We'll store them in a matching shape to 'responses_grid'.
     color_list = []
     for s in shape_vals:
         for c in color_vals:
@@ -174,21 +130,32 @@ if __name__ == "__main__":
     color_list = np.array(color_list)  # shape [121,]
 
     # 2.1) Compute unmodulated responses for entire grid
-    responses_grid_unmod = compute_grid_responses(W_R, W_F, shape_vals, color_vals, g_vector=None)
+    responses_grid_unmod = compute_grid_responses(
+        W_R, W_F, shape_vals, color_vals, g_vector=None
+    )
     # shape => [121, N]
 
     # 2.2) PCA on unmodulated grid responses, keep 3 PCs
     pca_grid = PCA(n_components=3)
     pca_grid.fit(responses_grid_unmod)  # shape = [121, N]
-    # We'll store the top 3 components in a matrix for easy projection:
-    # pca_grid.components_ has shape [3, N], so we can do x_proj = pca_grid.components_ @ x
-    # or just use 'transform' method
-    # But we'll also store them individually if we want
     pc_basis = pca_grid.components_  # shape [3, N]
 
-    # We'll define v1 as the first PC (normalized)
-    v1 = pc_basis[0]
+    # We'll define:
+    #   v1 as the first PC (normalized)
+    #   v2 as the second PC (normalized)
+    v1 = pc_basis[0].copy()
     v1 /= np.linalg.norm(v1)
+    v2 = pc_basis[1].copy()
+    v2 /= np.linalg.norm(v2)
+
+    # -----------------------------
+    # >>> Define the target vector:
+    # -----------------------------
+    # Suppose we want a 10-degree rotation from v1 toward v2 in the v1-v2 plane:
+    theta_deg = -8.0
+    theta = np.deg2rad(theta_deg)
+    v_target = v1 * np.cos(theta) + v2 * np.sin(theta)
+    v_target /= np.linalg.norm(v_target)
 
     # 3) For the color-axis alignment, pick shape=0.3
     shape_for_color_line = 0.3
@@ -202,104 +169,116 @@ if __name__ == "__main__":
         resp_c1 = compute_response(W_R, W_F, shape_for_color_line, 1.0, g)
         return resp_c1 - resp_c0
 
-    # 4) Objective: maximize cos^2 w.r.t. v1 => minimize negative cos^2
-    def alignment_objective(g):
+    # 3.1) Compute unmodulated color axis (for norm reference):
+    init_g = np.ones(N)
+    d_unmod = color_axis_direction(init_g)
+    norm_unmod_sq = np.linalg.norm(d_unmod)**2
+
+    # 4) Objective: maximize cos^2 w.r.t. v_target => minimize negative cos^2
+    def alignment_objective_angle_only(g):
         d_col = color_axis_direction(g)
-        dot_val = np.dot(v1, d_col)
-        denom = (np.linalg.norm(d_col) * np.linalg.norm(v1))
+        dot_val = np.dot(v_target, d_col)
+        denom = np.linalg.norm(d_col) * np.linalg.norm(v_target)
         if denom < 1e-15:
             return 0.0  # degenerate
         cos_val = dot_val / denom
-        cos_val = np.clip(cos_val, -1, 1)
+        # We want to maximize cos^2 => minimize the negative
         return -(cos_val**2)
 
-    # 5) Optimize over [0.8,1.2] for each neuron
-    L, U = 0.8, 1.2
-    bounds = [(L, U)] * N
-    init_g = np.ones(N)
+    # 4.1) Exact constraint: keep ||d_col||^2 == ||d_unmod||^2
+    def color_axis_norm_constraint(g):
+        d_col = color_axis_direction(g)
+        return np.linalg.norm(d_col)**2 - norm_unmod_sq
 
-    print("RUNNING L-BFGS-B...")
-    res = minimize(fun=alignment_objective,
-                   x0=init_g,
-                   method='L-BFGS-B',
-                   bounds=bounds,
-                   options={'maxiter': 200, 'disp': True})
+    # 5) Solve using SLSQP for exact equality + box constraints
+    from scipy.optimize import Bounds
+    L, U = 0.80, 1.20
+    bounds = Bounds([L]*N, [U]*N)
+
+    constraint_eq = {
+        'type': 'eq',
+        'fun': color_axis_norm_constraint
+    }
+
+    print("RUNNING SLSQP WITH EQUALITY CONSTRAINT...")
+    res = minimize(
+        fun=alignment_objective_angle_only,
+        x0=init_g,
+        method='SLSQP',
+        bounds=bounds,
+        constraints=[constraint_eq],
+        options={'maxiter': 300, 'disp': True}
+    )
 
     g_opt = res.x
-    print("Optimization done.  Final objective:", res.fun)
+    print("Optimization done. success =", res.success)
+    print("Final objective:", res.fun)
 
     # 5.1) Compare angles pre vs. post
-    def angle_with_v1(d_vec):
-        dot_v = np.dot(v1, d_vec)
-        denom = np.linalg.norm(v1)*np.linalg.norm(d_vec)
+    def angle_with_v(v, d_vec):
+        """
+        Returns the minimal angle (in deg) between v and d_vec
+        ignoring sign (i.e. 0 deg vs 180 deg is the same axis).
+        """
+        dot_v = np.dot(v, d_vec)
+        denom = np.linalg.norm(v)*np.linalg.norm(d_vec)
         if denom < 1e-15:
             return np.nan
         val = dot_v / denom
         val = np.clip(val, -1, 1)
         angle_deg = np.degrees(np.arccos(val))
-        # We'll consider 0 deg vs 180 deg the same "axis" => pick smaller angle
         return min(angle_deg, 180.0 - angle_deg)
 
-    d_unmod = color_axis_direction(init_g)
     d_mod = color_axis_direction(g_opt)
+    angle_pre = angle_with_v(v_target, d_unmod)
+    angle_post = angle_with_v(v_target, d_mod)
 
-    angle_pre = angle_with_v1(d_unmod)
-    angle_post = angle_with_v1(d_mod)
-    print(f"Angle pre-mod = {angle_pre:.3f} deg")
-    print(f"Angle post-mod = {angle_post:.3f} deg")
+    # Check final norm
+    final_norm = np.linalg.norm(d_mod)
+    init_norm = np.sqrt(norm_unmod_sq)
+    print(f"Initial color-axis norm = {init_norm:.4f}")
+    print(f"Final color-axis norm   = {final_norm:.4f} (difference: {final_norm - init_norm:.4e})")
+
+    print(f"Angle pre-mod = {angle_pre:.3f} deg [with v_target]")
+    print(f"Angle post-mod = {angle_post:.3f} deg [with v_target]")
     print(f"Angle improvement = {angle_pre - angle_post:.3f} deg")
 
     # ---------------------------------------------------------
     # 6) Visualization
-    #   6.1) 3D scatter: unmodulated vs modulated, each subplot in the same PC basis
-    #   6.2) Another figure: (color_selectivity - shape_selectivity) vs. g_opt
     # ---------------------------------------------------------
-
-    # 6.1) 3D scatter in the unmodulated PC space
-    # Project the unmodulated grid responses and the modulated grid responses
-    # into the same PCA space (the one derived from unmodulated)
-    # => we can use pca_grid.transform(...) for convenience
     responses_grid_mod = compute_grid_responses(W_R, W_F, shape_vals, color_vals, g_vector=g_opt)
+
     proj_unmod = pca_grid.transform(responses_grid_unmod)  # shape [121, 3]
     proj_mod = pca_grid.transform(responses_grid_mod)      # shape [121, 3]
 
-    # Make a 3D figure with 2 subplots side by side
-    # Make a 3D figure with 2 subplots side by side
     fig = plt.figure(figsize=(12,5))
-
-    # First subplot
     ax1 = fig.add_subplot(121, projection='3d')
     ax1.set_title("Unmodulated in PC Space")
     sc1 = ax1.scatter(proj_unmod[:,0], proj_unmod[:,1], proj_unmod[:,2],
-                    c=color_list, cmap='viridis', s=20)
+                      c=color_list, cmap='viridis', s=20)
     ax1.set_xlabel("PC1")
     ax1.set_ylabel("PC2")
     ax1.set_zlabel("PC3")
 
-    # Second subplot
     ax2 = fig.add_subplot(122, projection='3d')
     ax2.set_title("Modulated in SAME PC Space")
     sc2 = ax2.scatter(proj_mod[:,0], proj_mod[:,1], proj_mod[:,2],
-                    c=color_list, cmap='viridis', s=20)
+                      c=color_list, cmap='viridis', s=20)
     ax2.set_xlabel("PC1")
     ax2.set_ylabel("PC2")
     ax2.set_zlabel("PC3")
 
-    # Get the overall min and max for each dimension
     x_min = min(proj_unmod[:,0].min(), proj_mod[:,0].min())
     x_max = max(proj_unmod[:,0].max(), proj_mod[:,0].max())
     y_min = min(proj_unmod[:,1].min(), proj_mod[:,1].min())
     y_max = max(proj_unmod[:,1].max(), proj_mod[:,1].max())
     z_min = min(proj_unmod[:,2].min(), proj_mod[:,2].min())
     z_max = max(proj_unmod[:,2].max(), proj_mod[:,2].max())
-
-    # Set the same limits for both plots
     for ax in [ax1, ax2]:
         ax.set_xlim([x_min, x_max])
         ax.set_ylim([y_min, y_max])
         ax.set_zlim([z_min, z_max])
 
-    # Add colorbars
     cb1 = plt.colorbar(sc1, ax=ax1, shrink=0.7)
     cb1.set_label("Color Value")
     cb2 = plt.colorbar(sc2, ax=ax2, shrink=0.7)
@@ -309,8 +288,7 @@ if __name__ == "__main__":
     plt.show()
 
     # 6.2) Scatter: (color_selectivity - shape_selectivity) vs. g_opt
-    color_diff = S[:,1] - S[:,0]   # for each neuron i, color_sel[i] - shape_sel[i]
-    # or if you want shape minus color, reverse it
+    color_diff = S[:,1] - S[:,0]
 
     fig2 = plt.figure(figsize=(6,5))
     plt.scatter(color_diff, g_opt, alpha=0.7, c=color_diff, cmap='bwr')
