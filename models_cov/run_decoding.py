@@ -183,7 +183,7 @@ if __name__ == "__main__":
     # Define range boundaries for concentration
     # e.g., concentrate points between 40% and 70% of the full range
     mid_range_low_boundary = 0.5#min_sigma + (max_sigma - min_sigma) * 0.05
-    mid_range_high_boundary = 1.4#min_sigma + (max_sigma - min_sigma) * 0.95
+    mid_range_high_boundary = 2.0#min_sigma + (max_sigma - min_sigma) * 0.95
 
     # Generate points in each section
     low_sigmas = np.linspace(min_sigma, mid_range_low_boundary, n_low, endpoint=False)
@@ -242,16 +242,16 @@ if __name__ == "__main__":
     # Scatter plot: Misaligned Accuracy vs Aligned Accuracy
     scatter = ax_decoding.scatter(accuracy_results_misaligned * 100, accuracy_results_aligned * 100,
                                   c=sigma_pc1_levels, cmap='viridis_r', # Reversed viridis: high noise = purple
-                                  s=60, zorder=3, ec='black', lw=0.5,
+                                  s=60, zorder=3, ec='black', lw=0.5,alpha=0.6,
                                   norm=plt.matplotlib.colors.LogNorm()) # Use LogNorm for colorbar
 
     # Add diagonal line y=x for reference (chance level to 100%)
     chance_level = 100.0 / n_features_classify
-    ax_decoding.plot([chance_level, 100], [chance_level, 100], color='gray', linestyle='--', label='Aligned Acc = Misaligned Acc', zorder=1)
+    ax_decoding.plot([chance_level, 100], [chance_level, 100], color='gray', linestyle='--', label='y=x', zorder=1)
 
-    ax_decoding.set_xlabel("Decoding Accuracy (%) (Misaligned Gain)")
-    ax_decoding.set_ylabel("Decoding Accuracy (%) (Aligned Gain)")
-    ax_decoding.set_title(f"Decoding Accuracy Comparison ({n_features_classify} Features)")
+    ax_decoding.set_xlabel("Least Aligned Decoding Accuracy (%)")
+    ax_decoding.set_ylabel("Most Aligned Decoding Accuracy (%)")
+    ax_decoding.set_title(f"Decoding Accuracy (%) Comparison")
     # Set limits from slightly below chance to 100
     ax_decoding.set_xlim(left=chance_level - 5, right=102)
     ax_decoding.set_ylim(bottom=chance_level - 5, top=102)
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
     # Add colorbar
     cbar = fig_decoding.colorbar(scatter)
-    cbar.set_label('Noise Std Dev in PC1 Projection ($\sigma_{PC1}$)')
+    cbar.set_label('Noise Std Dev in PC1 Projection')
 
     plt.tight_layout()
     plt.show()

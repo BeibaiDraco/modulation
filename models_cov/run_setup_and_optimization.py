@@ -30,7 +30,7 @@ desired_radius_W_R = 0.9 # Spectral radius for stability
 
 # --- Noise Params ---
 num_noise_trials = 500
-noise_std = 0.1 # Standard deviation of internal noise added
+noise_std = 0.2 # Standard deviation of internal noise added
 
 # --- Optimization Params ---
 gain_bounds = (0.5, 1.5) # Bounds for individual gain elements in g
@@ -57,7 +57,13 @@ def initialize_tuning_and_types(N, N_E, feature_range):
 
 def initialize_W_F(N, K, prefs, tuning_sigma_W_F, feature_range):
     """Initializes feedforward weights W_F."""
-    W_F = np.ones((N, K)) # Shape (N, 1)
+    W_F = np.zeros((N, K))  # Shape (N, 1)
+    feature_center = np.mean(feature_range)
+    for i in range(N):
+        # Create Gaussian tuning curve centered at neuron's preferred feature
+        pref_distance = prefs[i] - feature_center
+        tuning_factor = np.exp(-(pref_distance**2) / (2 * tuning_sigma_W_F**2))
+        W_F[i, :] = tuning_factor
     return W_F
 
 def initialize_W_R_EI(N, prefs, is_E, is_I, J_base, sigma, desired_radius):
@@ -275,8 +281,8 @@ if __name__ == "__main__":
     fig_traj, ax_traj = plt.subplots(figsize=(9, 8))
     ax_traj.scatter(noise_proj[:, 0], noise_proj[:, 1], alpha=0.2, s=15, color='gray', label=f'Noise Trials')
     ax_traj.plot(stim_proj_baseline[:, 0], stim_proj_baseline[:, 1], marker='.', linestyle='-', color='black', alpha=0.7, label=f'Baseline G=1 ({angle_baseline:.1f}°)')
-    ax_traj.plot(stim_proj_aligned[:, 0], stim_proj_aligned[:, 1], marker='.', linestyle='-', color='blue', alpha=0.8, label=f'Aligned G ({angle_aligned:.1f}°)')
-    ax_traj.plot(stim_proj_misaligned[:, 0], stim_proj_misaligned[:, 1], marker='.', linestyle='-', color='red', alpha=0.8, label=f'Misaligned G ({angle_misaligned:.1f}°)')
+    ax_traj.plot(stim_proj_aligned[:, 0], stim_proj_aligned[:, 1], marker='.', linestyle='-', color='blue', alpha=0.8, label=f'Most Aligned ({angle_aligned:.1f}°)')
+    ax_traj.plot(stim_proj_misaligned[:, 0], stim_proj_misaligned[:, 1], marker='.', linestyle='-', color='red', alpha=0.8, label=f'Least Aligned ({angle_misaligned:.1f}°)')
     arrow_scale = np.max(np.abs(noise_proj)) * 0.6
     ax_traj.arrow(0, 0, arrow_scale, 0, head_width=arrow_scale*0.08, head_length=arrow_scale*0.1, fc='darkgreen', ec='darkgreen', lw=1.5, label='Noise PC1')
     ax_traj.arrow(0, 0, 0, arrow_scale, head_width=arrow_scale*0.08, head_length=arrow_scale*0.1, fc='purple', ec='purple', lw=1.5, label='Noise PC2')
@@ -291,11 +297,11 @@ if __name__ == "__main__":
     ax_aligned_g.scatter(prefs[e_indices], g_aligned[e_indices], alpha=0.7, s=30, label=f'E Neurons', c='royalblue')
     ax_aligned_g.scatter(prefs[i_indices], g_aligned[i_indices], alpha=0.7, s=40, label=f'I Neurons', c='crimson', marker='x')
     ax_aligned_g.axhline(1.0, color='gray', linestyle='--', label='Baseline G=1'); ax_aligned_g.set_xlabel("Neuron Feature Preference"); ax_aligned_g.set_ylabel("Optimized Gain Value")
-    ax_aligned_g.set_title(f"Aligned Gain - Success: {res_aligned.success}"); ax_aligned_g.legend(); ax_aligned_g.grid(True, linestyle=':', alpha=0.7); ax_aligned_g.set_ylim(gain_bounds[0] - 0.1, gain_bounds[1] + 0.1)
+    ax_aligned_g.set_title(f"Aligned Gain: {res_aligned.success}"); ax_aligned_g.legend(); ax_aligned_g.grid(True, linestyle=':', alpha=0.7); ax_aligned_g.set_ylim(gain_bounds[0] - 0.1, gain_bounds[1] + 0.1)
     ax_misaligned_g.scatter(prefs[e_indices], g_misaligned[e_indices], alpha=0.7, s=30, label=f'E Neurons', c='royalblue')
     ax_misaligned_g.scatter(prefs[i_indices], g_misaligned[i_indices], alpha=0.7, s=40, label=f'I Neurons', c='crimson', marker='x')
     ax_misaligned_g.axhline(1.0, color='gray', linestyle='--', label='Baseline G=1'); ax_misaligned_g.set_xlabel("Neuron Feature Preference")
-    ax_misaligned_g.set_title(f"Misaligned Gain - Success: {res_misaligned.success}"); ax_misaligned_g.legend(); ax_misaligned_g.grid(True, linestyle=':', alpha=0.7)
+    ax_misaligned_g.set_title(f"Misaligned Gain: {res_misaligned.success}"); ax_misaligned_g.legend(); ax_misaligned_g.grid(True, linestyle=':', alpha=0.7)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95]); plt.show()
 
     # -------------------------------------------------
