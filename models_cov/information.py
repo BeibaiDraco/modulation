@@ -13,7 +13,7 @@ from numpy.linalg import eig, norm, solve
 # ───────── 1. network construction ─────────
 np.random.seed(0)
 N           = 120
-rho         = 0.5         # spectral radius of W_R
+rho         = 0.4        # spectral radius of W_R
 sigma_eta   = 1.0          # private-noise SD
 trials_sim  = 50000        # Monte-Carlo samples for noise check
 
@@ -74,30 +74,44 @@ x_n   = eta @ inv_I_W.T                   # shape (trials,N)
 proj  = x_n @ np.vstack([axis(th) for th in thetas]).T  # (trials, θ)
 
 N_emp = proj.var(0)                       # empirical noise variance
-
 # ───────── 5. plots ─────────
-plt.style.use("seaborn-v0_8-whitegrid")
-fig, axs = plt.subplots(3, 1, figsize=(7, 10), sharex=True)
+# Set figure size parameters
+fig_width = 6  # width in inches
+fig_height = 7  # height in inches
+fig, axs = plt.subplots(2, 1, figsize=(fig_width, fig_height), sharex=True)
 
-axs[0].plot(thetas, S_th, lw=2, label="theory")
-axs[0].scatter(thetas, S_th, s=10, c="k", alpha=0.3)
-axs[0].set_ylabel("signal power $\\beta^2\\cos^2\\theta$")
-axs[0].set_title("Signal vs. decoding-axis angle")
+# First subplot with both signal and noise curves
+axs[0].plot(thetas, S_th, lw=2, color='green', label="Signal power")
+axs[0].plot(thetas, N_th, lw=2, color='grey', label="Noise variance")
+axs[0].set_ylabel("Response Variance (Normalized)")
+axs[0].set_title("Signal and Noise vs. decoding-axis angle")
+axs[0].legend(frameon=False, fontsize=9)
+axs[0].grid(False)
 
-axs[1].plot(thetas, N_th, lw=2, label="theory")
-axs[1].scatter(thetas, N_emp, s=10, c="r", alpha=0.3, label="simulation")
-axs[1].set_ylabel("noise variance $v^\\top\\Sigma v$")
-axs[1].set_title("Noise vs. decoding-axis angle")
-axs[1].legend(frameon=False, fontsize=9)
-
-axs[2].plot(thetas, J_th, lw=2)
-axs[2].set_ylabel("Fisher ratio $J(\\theta)$")
-axs[2].set_xlabel("angle $\\theta$ (degrees)")
-axs[2].set_title("Discriminability vs. angle")
+# Second subplot for Fisher ratio
+axs[1].plot(thetas, J_th, lw=2, color='black')
+axs[1].set_ylabel("Fisher ratio $J(\\theta)$")
+axs[1].set_xlabel("angle $\\theta$ (degrees)")
+axs[1].set_title("Discriminability vs. angle")
+axs[1].grid(False)
 
 for ax in axs:
     ax.axvline(0, ls="--", c="gray", lw=0.8)
     ax.set_xlim(-90, 90)
 
 plt.tight_layout()
+
+# ───────── 6. save plots ─────────
+# Save the figure in both PNG and SVG formats
+plt.savefig('information_plot.png', dpi=300, bbox_inches='tight')
+plt.savefig('information_plot.svg', bbox_inches='tight')
 plt.show()
+print("Plots saved as 'information_plot.png' and 'information_plot.svg'")
+
+# ───────── 7. save data ─────────
+# Save the plotting data to a file
+data = np.column_stack((thetas, S_th, N_th, J_th))
+header = "theta_degrees,signal_power,noise_variance,fisher_ratio"
+np.savetxt('information_data.csv', data, delimiter=',', header=header)
+print("Data saved as 'information_data.csv'")
+
