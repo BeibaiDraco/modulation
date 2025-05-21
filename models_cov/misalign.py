@@ -17,7 +17,7 @@ N          = 120          # neurons
 rho        = 0.8          # spectral radius of W_R
 phi_deg    = 40           # desired angle between Δμ and u_rec
 sigma_eta  = 1.0          # private noise SD
-trials     = 10000        # noise samples
+trials     = 5000        # noise samples
 
 # ─── 2. define noise axis  u_rec  (PC-1) ───────────────────────────────
 u_rec = np.zeros((N, 1));  u_rec[0, 0] = 1.0
@@ -77,11 +77,11 @@ def draw_arrow(vec, **kw):
     ax.arrow(0, 0, vec[0], vec[1],
              head_width=0.08, length_includes_head=True, **kw)
 
-draw_arrow(u_rec_xy / norm(u_rec_xy), color='k',   lw=2, label='noise PC-1')
-draw_arrow(dmu_xy   / norm(dmu_xy),   color='red', lw=2, label='stimulus axis')
+draw_arrow(10 * u_rec_xy / norm(u_rec_xy), color='k',   lw=2, label='noise PC-1')
+draw_arrow(10 * dmu_xy   / norm(dmu_xy),   color='red', lw=2, label='stimulus axis')
 
 ax.set_xlabel("axis 1  (u_rec)")
-ax.set_ylabel("axis 2  (Δμ⊥)")
+ax.set_ylabel("axis 2  (Δμ)")
 ax.set_aspect('equal')
 ax.set_title(f"Stimulus axis {phi_deg}° from noise axis\n(in their own plane)")
 ax.legend(frameon=False)

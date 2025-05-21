@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     # Define gain scaling factors and their corresponding colormaps
     gain_scales = [ 1.0, 1.5, 2.0, 2.5]
-    colormaps = [ 'Greens', 'Reds', 'Purples', 'Oranges']
+    colormaps = ['Blues', 'Greens', 'Reds', 'Purples', 'Oranges']
     
     # Extract noise PC1 for decoding
     noise_pc1 = noise_pcs_basis[0, :]
