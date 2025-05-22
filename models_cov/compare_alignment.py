@@ -146,6 +146,18 @@ plt.savefig('compare_alignment.png', dpi=300)
 # Save the figure in SVG format
 plt.savefig('compare_alignment.svg', bbox_inches='tight')
 
+# Plot and save W_R matrix
+plt.figure(figsize=(5, 5))
+plt.imshow(W_R, cmap='coolwarm', vmin=-np.abs(W_R).max(), vmax=np.abs(W_R).max())
+plt.colorbar(label='Connection strength')
+plt.title('Recurrent Connectivity Matrix $W_R$')
+plt.xlabel('Neuron index')
+plt.ylabel('Neuron index')
+plt.tight_layout()
+plt.savefig('recurrent_connectivity.png', dpi=300, bbox_inches='tight')
+plt.savefig('recurrent_connectivity.svg', bbox_inches='tight')
+plt.show()
+
 # Save the data for plotting
 data_misaligned = {
     'noise_xy': noise_xy,

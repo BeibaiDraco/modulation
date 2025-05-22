@@ -115,3 +115,16 @@ header = "theta_degrees,signal_power,noise_variance,fisher_ratio"
 np.savetxt('information_data.csv', data, delimiter=',', header=header)
 print("Data saved as 'information_data.csv'")
 
+#plot the W_R
+# ───────── 8. plot the recurrent connectivity matrix W_R ─────────
+plt.figure(figsize=(5, 5))
+plt.imshow(W_R, cmap='coolwarm', vmin=-np.abs(W_R).max(), vmax=np.abs(W_R).max())
+plt.colorbar(label='Connection strength')
+plt.title('Recurrent Connectivity Matrix $W_R$')
+plt.xlabel('Neuron index')
+plt.ylabel('Neuron index')
+plt.tight_layout()
+plt.savefig('recurrent_connectivity.png', dpi=300, bbox_inches='tight')
+plt.savefig('recurrent_connectivity.svg', bbox_inches='tight')
+plt.show()
+
