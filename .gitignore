@@ -1,0 +1,16 @@
+# OS cruft
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter autosaves
+.ipynb_checkpoints/
+
+# Large/derived outputs (keep only if you truly want them tracked)
+plots/
+*.png
+*.svg
+*.pdf
+*.zip
