@@ -170,7 +170,7 @@ if __name__ == "__main__":
         return -cos_sq  # negative => maximizing cos^2
 
     # 5) Box-constrained optimization in [L, U]^N
-    L, U = 0.9, 1.1
+    L, U = 0.80, 1.20
     init_g = np.ones(N)  # start from unmodulated
     bounds = [(L, U)] * N
 
@@ -200,9 +200,13 @@ if __name__ == "__main__":
     d_mod = color_axis_direction(g_opt)
 
     angle_pre = angle_with_v1(d_unmod)
+    angle_pre = min(angle_pre, 180 - angle_pre)  # take smaller angle
     angle_post = angle_with_v1(d_mod)
+    angle_post = min(angle_post, 180 - angle_post)
     print(f"Unmodulated angle = {angle_pre:.3f} degrees")
     print(f"Post-optimization angle = {angle_post:.3f} degrees")
+    angel_change = -(angle_post-angle_pre)
+    print(f"Angle Improvement = {angel_change:.3f} degrees")
 
     # 6) Visualization
     import matplotlib.pyplot as plt

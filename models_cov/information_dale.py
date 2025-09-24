@@ -119,3 +119,28 @@ plt.savefig('recurrent_connectivity_dale.png', dpi=300, bbox_inches='tight')
 plt.savefig('recurrent_connectivity_dale.svg', bbox_inches='tight')
 plt.show()
 print("Connectivity matrix plots saved as 'recurrent_connectivity_dale.png' and 'recurrent_connectivity_dale.svg'")
+
+# ─── 8. Check the rank of W_R ────────────────────────────────────────
+# Calculate the singular values of W_R
+singular_values = np.linalg.svd(W_R, compute_uv=False)
+
+# Print the rank and singular values
+print("\n─── Rank analysis of W_R ───")
+print(f"Rank of W_R: {np.sum(singular_values > 1e-10)}")
+print(f"Largest singular value: {singular_values[0]:.6f}")
+
+# Plot the singular values
+plt.figure(figsize=(6, 4))
+plt.semilogy(singular_values, 'o-', markersize=6)
+plt.grid(True, alpha=0.3)
+plt.xlabel('Index')
+plt.ylabel('Singular value (log scale)')
+plt.title('Singular Value Spectrum of W_R')
+plt.tight_layout()
+plt.savefig('singular_values_dale.png', dpi=300, bbox_inches='tight')
+plt.savefig('singular_values_dale.svg', bbox_inches='tight')
+plt.show()
+print("Singular value spectrum saved as 'singular_values_dale.png' and 'singular_values_dale.svg'")
+
+theta_star = thetas[np.argmax(J_th)]
+print(f"Peak at θ = {theta_star:.2f}°")

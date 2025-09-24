@@ -355,7 +355,7 @@ def compute_modulated_responses_pc1_small_gain_auto(
         color_ratio = color_part / denom
         shape_ratio = shape_part / denom
 
-        raw_g = 1.0 + alpha_color * color_ratio * pc1_unit + alpha_shape * shape_ratio * pc1_unit
+        raw_g = 1.0 - alpha_color * color_ratio * pc1_unit + alpha_shape * shape_ratio * pc1_unit
         g_clipped = np.clip(raw_g, 0.8, 1.2)
 
         G = np.diag(g_clipped)
@@ -399,6 +399,7 @@ def compute_modulated_responses_pc1_small_gain_auto(
         angle_col_mod_try,_,_ = measure_axis_in_pca(pca_unmod_grid, color_line_mod_try)
 
         improvement = angle_col_un - angle_col_mod_try
+    
         print(f"Iter={iteration}, alpha={alpha:.3f}, gamma={gamma:.3f}, colorAngle={angle_col_mod_try:.2f}, improvement={improvement:.2f}")
 
         if improvement>angle_tolerance:
@@ -407,6 +408,7 @@ def compute_modulated_responses_pc1_small_gain_auto(
             best_g=g_try
             best_angle_col_mod=angle_col_mod_try
             print("Requirement met! color axis improved by more than angle_tolerance.")
+            print(best_g)
             break
         else:
             # increment alpha,gamma slightly

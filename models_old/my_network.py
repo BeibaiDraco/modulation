@@ -17,22 +17,27 @@ from mpl_toolkits.mplot3d import Axes3D
 # -------------------------
 def initialize_selectivity_matrix(N, K):
     """
-    Initialize the selectivity matrix S with constraints.
-    First half of neurons selective mainly to shape,
-    the second half mirrors this for color.
+    Half are shape-based, half are color-based, with a random distribution.
+    The first half has shape > color (if needed, we reassign),
+    and the second half is mirrored (swap shape/color).
     """
     S = np.zeros((N, K))
-    # First half selectivity
+    # 1) Random shape (first half)
     S[:N//2, 0] = np.random.rand(N//2)
+    # 2) Assign color as (0.5 - shape/2)
     S[:N//2, 1] = 0.5 - S[:N//2, 0] / 2
 
-    # Adjust negative indices
-    negative_indices = (S[:N//2, 0] - S[:N//2, 1]) < 0
-    S[:N//2, 0][negative_indices] = np.random.uniform(0, 0.5, size=np.sum(negative_indices))
+    # 3) If shape < color, reassign shape and recalc color
+    neg_idx = (S[:N//2, 0] - S[:N//2, 1]) < 0
+    if np.any(neg_idx):
+        S[:N//2, 0][neg_idx] = np.random.uniform(0, 0.5, size=np.sum(neg_idx))
+        # Recompute the color to match the new shape
+        S[:N//2, 1][neg_idx] = 0.5 - S[:N//2, 0][neg_idx] / 2
 
-    # Mirror for second half
+    # 4) Mirror for the second half: color = shape, shape = color
     S[N//2:, 1] = S[:N//2, 0]
     S[N//2:, 0] = S[:N//2, 1]
+
     return S
 
 def initialize_W_F(S):
@@ -460,7 +465,7 @@ def plot_3d_pca_grid_and_external_noise(responses_grid, external_noise_responses
         grid_3d[:, 1],
         grid_3d[:, 2],
         c=stimuli_grid[:, 1],
-        cmap='coolwarm',
+        cmap='winter',
         s=40,
         alpha=0.8,
         label='Grid Responses'
@@ -480,7 +485,7 @@ def plot_3d_pca_grid_and_external_noise(responses_grid, external_noise_responses
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
     ax.set_zlabel("PC3")
-    set_axes_equal(ax)
+    #set_axes_equal(ax)
     cbar = fig.colorbar(sc1, ax=ax, label="Color Stimulus Value")
     plt.legend()
     plt.tight_layout()

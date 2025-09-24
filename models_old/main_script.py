@@ -26,14 +26,14 @@ from my_network import (
 def main():
     # 1) Hyperparams
     np.random.seed(15)
-    N = 300           
+    N = 100           
     K = 2             
     num_stimuli = 10  
     num_noise_trials = 50  
     noise_level = 1.0       
     desired_radius = 0.9    
     p_high = 0.25
-    p_low = 0.00
+    p_low = 0.25
 
     # 2) Build S, W_F
     S = initialize_selectivity_matrix(N, K)
@@ -100,18 +100,24 @@ def main():
 
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(
+        # Save the scatter plot objects
+    sc1 = ax.scatter(
         grid_unmod_3d[:, 0], grid_unmod_3d[:, 1], grid_unmod_3d[:, 2],
-        c=stimuli_grid[:, 0],alpha=0.3, s=40, label='Unmod Grid'
+        c=stimuli_grid[:, 0], alpha=0.3, s=40, label='Unmod Grid', cmap='winter'
     )
-    ax.scatter(
+    sc2 = ax.scatter(
         grid_mod_3d[:, 0], grid_mod_3d[:, 1], grid_mod_3d[:, 2],
-        c=stimuli_grid[:, 0],alpha=0.6, s=40, label='Mod PC3 Grid'
+        c=stimuli_grid[:, 0], alpha=1, s=40, label='Mod PC3 Grid', cmap='winter'
     )
+
+
     ax.set_title("PC3-based Modulation vs. Unmodulated (Untuned W_R)")
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
     ax.set_zlabel("PC3")
+    
+    cbar = fig.colorbar(sc2, ax=ax, shrink=0.7, aspect=20)
+    cbar.set_label('Stimulus value')
     from my_network import set_axes_equal
     #set_axes_equal(ax)
     plt.legend()
