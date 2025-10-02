@@ -1,0 +1,49 @@
+{
+  "constraint_type": "ball",
+  "hard_norm": true,
+  "ranges": [
+    0.02,
+    0.04,
+    0.08,
+    0.12,
+    0.16
+  ],
+  "rows": [
+    {
+      "range": 0.02,
+      "unmod_to_target_deg": 98.19847120987204,
+      "opt_to_target_deg": 106.8564077572451,
+      "delta_opt_vs_unmod_deg": 17.144205862549256,
+      "success": true
+    },
+    {
+      "range": 0.04,
+      "unmod_to_target_deg": 98.19847120987204,
+      "opt_to_target_deg": 113.07111425800069,
+      "delta_opt_vs_unmod_deg": 27.08142740655901,
+      "success": true
+    },
+    {
+      "range": 0.08,
+      "unmod_to_target_deg": 98.19847120987204,
+      "opt_to_target_deg": 122.14720358949133,
+      "delta_opt_vs_unmod_deg": 40.407273607521525,
+      "success": true
+    },
+    {
+      "range": 0.12,
+      "unmod_to_target_deg": 98.19847120987204,
+      "opt_to_target_deg": 129.0065893305767,
+      "delta_opt_vs_unmod_deg": 50.101996157959775,
+      "success": true
+    },
+    {
+      "range": 0.16,
+      "unmod_to_target_deg": 98.19847120987204,
+      "opt_to_target_deg": 134.52119578987862,
+      "delta_opt_vs_unmod_deg": 57.60820499182802,
+      "success": true
+    }
+  ],
+  "tag": "default_smallpc1_custom"
+}

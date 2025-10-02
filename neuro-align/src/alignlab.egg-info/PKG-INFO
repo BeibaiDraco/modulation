@@ -1,0 +1,25 @@
+Metadata-Version: 2.4
+Name: alignlab
+Version: 0.1.0
+Summary: Alignment experiments for population codes (PC alignment with constraints)
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.23
+Requires-Dist: scipy>=1.10
+Requires-Dist: scikit-learn>=1.3
+Requires-Dist: matplotlib>=3.7
+Requires-Dist: PyYAML>=6.0
+
+# alignlab
+
+A small framework for alignment experiments in linear recurrent population models.
+
+## Quickstart
+
+```bash
+pip install -e .
+python -m alignlab.cli run --config configs/default_smallpc1_custom.yaml
+python -m alignlab.cli sweep --config configs/default_smallpc1_custom.yaml --ranges 0.02 0.04 0.08 0.12 0.16
+```
+
+Outputs (figures + JSON) are saved in `outputs/`.
