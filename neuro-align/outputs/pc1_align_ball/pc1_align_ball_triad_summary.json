@@ -1,0 +1,148 @@
+{
+  "pca": {
+    "explained_variance_ratio": [
+      0.9975813294110368,
+      0.0024186705889631447,
+      1.1178114936615518e-31
+    ]
+  },
+  "unmod": {
+    "color_axis_norm": 57.229525165566436,
+    "shape_axis_norm": 54.37061660132204
+  },
+  "color_alignment": {
+    "solver": "SLSQP",
+    "final_objective": -0.9983724988366922,
+    "success": true,
+    "status": 0,
+    "message": "Optimization terminated successfully",
+    "iterations": 37,
+    "func_evals": 4482,
+    "grad_evals": 37,
+    "angles_deg": {
+      "unmod_to_target": 2.6776650002376607,
+      "opt_to_target": 2.3120709607356558,
+      "delta_opt_vs_unmod": 0.5534211137047566,
+      "improvement": 0.365594039502005
+    },
+    "axis_norms": {
+      "pre": 57.229525165566436,
+      "post": 57.229525165569385,
+      "equality_residual": 3.374225343577564e-10
+    },
+    "g_stats": {
+      "min": 0.8306680050577645,
+      "max": 1.1511391017414856,
+      "mean": 1.0259541322212444,
+      "std": 0.07567286846062508,
+      "l2_norm_g_minus_1": 0.8763560920368091,
+      "linf_norm_g_minus_1": 0.1693319949422355
+    },
+    "constraint_residuals": {
+      "ball": {
+        "R_fraction": 0.08,
+        "R_absolute": 0.8763560920082658,
+        "residual_l2": -2.8543278851600462e-11,
+        "residual_sq": -5.002820380184403e-11
+      }
+    }
+  },
+  "shape_alignment": {
+    "solver": "SLSQP",
+    "final_objective": -0.9979665896094277,
+    "success": true,
+    "status": 0,
+    "message": "Optimization terminated successfully",
+    "iterations": 57,
+    "func_evals": 6912,
+    "grad_evals": 57,
+    "angles_deg": {
+      "unmod_to_target": 2.9676486715318395,
+      "opt_to_target": 2.5845351597479342,
+      "delta_opt_vs_unmod": 0.6179096576597751,
+      "improvement": 0.3831135117839053
+    },
+    "axis_norms": {
+      "pre": 54.37061660132204,
+      "post": 54.370616601327164,
+      "equality_residual": 5.570655048359185e-10
+    },
+    "g_stats": {
+      "min": 0.7532076687949804,
+      "max": 1.1253695023340033,
+      "mean": 1.0271976885166467,
+      "std": 0.07523487050514131,
+      "l2_norm_g_minus_1": 0.8763560920475592,
+      "linf_norm_g_minus_1": 0.24679233120501964
+    },
+    "constraint_residuals": {
+      "ball": {
+        "R_fraction": 0.08,
+        "R_absolute": 0.8763560920082658,
+        "residual_l2": -3.929334635444093e-11,
+        "residual_sq": -6.886990977506002e-11
+      }
+    }
+  },
+  "gain_comparison": {
+    "ratio_color_over_shape": {
+      "min": 0.7860026801381447,
+      "max": 1.3276274404835124,
+      "mean": 1.0071439063578973,
+      "median": 0.9917987492223721,
+      "std": 0.130101081270274
+    },
+    "diff_color_minus_shape": {
+      "min": -0.22615791430421972,
+      "max": 0.2536546727374599,
+      "mean": -0.0012435562954022177,
+      "median": -0.008691101147617397,
+      "std": 0.12748962196356586
+    }
+  },
+  "cfg": {
+    "network": {
+      "N": 120,
+      "K": 2,
+      "seed": 15,
+      "desired_radius": 0.9,
+      "p_high": 0.2,
+      "p_low": 0.2,
+      "zero_sum": "none",
+      "wr_tuned": false,
+      "weight_scale": 0.1
+    },
+    "objective": {
+      "target_type": "pc1",
+      "theta_deg": 30.0,
+      "phi_deg": 25.0,
+      "axis_of_interest": "color",
+      "shape_for_color_line": 0.3,
+      "color_for_shape_line": 0.3,
+      "custom_stim_line_start": null,
+      "custom_stim_line_end": null
+    },
+    "constraints": {
+      "type": "ball",
+      "radius": 0.08,
+      "box_half_width": 0.2,
+      "hard_norm": true,
+      "positive_gains": true
+    },
+    "grid": {
+      "shape_vals": [
+        0.0,
+        0.33,
+        0.66,
+        1.0
+      ],
+      "color_vals": [
+        0.0,
+        0.33,
+        0.66,
+        1.0
+      ]
+    },
+    "tag": "pc1_align_ball"
+  }
+}

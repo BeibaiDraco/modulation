@@ -1,9 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, Optional
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from numpy.typing import NDArray
@@ -33,8 +31,13 @@ def plot_original_two_panel(
     color_vals: Sequence[float],
     outdir: Path,
     tag: str,
+    *,
+    zlim: Optional[tuple[float, float]] = None,  # e.g., (-1, 1)
+    elev: Optional[float] = None,                # starting elevation (deg)
+    azim: Optional[float] = None,                # starting azimuth (deg)
+    show: bool = False,                          # open interactive window
 ) -> None:
-    """Your two-panel 3D plot with colorbars and axis/target lines."""
+    """Two-panel 3D plot with colorbars and target/axis lines."""
     _ensure_dir(outdir)
 
     comps = pca_components[:3, :]                # 3 x N
@@ -45,7 +48,7 @@ def plot_original_two_panel(
     mins = np.minimum(Z_unmod.min(axis=0), Z_mod.min(axis=0))
     maxs = np.maximum(Z_unmod.max(axis=0), Z_mod.max(axis=0))
 
-    # Match your ordering: for each shape, iterate color
+    # For each shape, iterate color (your original ordering)
     color_list = np.array([c for _s in shape_vals for c in color_vals])
 
     fig = plt.figure(figsize=(13, 5))
@@ -57,7 +60,7 @@ def plot_original_two_panel(
     sc2 = ax2.scatter(Z_mod[:, 0], Z_mod[:, 1], Z_mod[:, 2],
                       c=color_list, cmap='viridis', s=20)
 
-    # Lines: target + axes (colors match your snippet)
+    # Lines: target + axes
     line3d(ax1, target_pc_coords, two_sided=False, linewidth=2, color='crimson')
     line3d(ax1, axis_unmod_pc,   two_sided=False, linewidth=2, color='black')
     line3d(ax2, target_pc_coords, two_sided=False, linewidth=2, color='crimson')
@@ -66,11 +69,17 @@ def plot_original_two_panel(
     for ax in (ax1, ax2):
         ax.set_xlim([mins[0], maxs[0]])
         ax.set_ylim([mins[1], maxs[1]])
-        ax.set_zlim([mins[2], maxs[2]])
+        if zlim is not None:
+            ax.set_zlim(zlim)  # <- fixed Z range if provided
+        else:
+            ax.set_zlim([mins[2], maxs[2]])
         ax.set_xlabel('PC1')
         ax.set_ylabel('PC2')
         ax.set_zlabel('PC3')
         ax.set_box_aspect((1, 1, 1))
+        if (elev is not None) or (azim is not None):
+            ax.view_init(elev=elev if elev is not None else ax.elev,
+                         azim=azim if azim is not None else ax.azim)
 
     ax1.set_title('Unmodulated Responses')
     ax2.set_title('Modulated Responses')
@@ -89,13 +98,16 @@ def plot_original_two_panel(
     png = outdir / f"{tag}_embedding_twopanel.png"
     pdf = outdir / f"{tag}_embedding_twopanel.pdf"
     plt.savefig(png, dpi=200); plt.savefig(pdf)
+
+    if show:
+        plt.show()
     plt.close(fig)
 
 def plot_embedding_3d(Z0: NDArray[np.float64], Z1: NDArray[np.float64],
                       pca_components, target_vec_neuron: NDArray[np.float64],
                       d_unmod_neuron: NDArray[np.float64], d_opt_neuron: NDArray[np.float64],
                       outdir: Path, tag: str) -> None:
-    """Keeps the combined single-axes plot (if you still want it)."""
+    """Single-axes plot (non-interactive save)."""
     _ensure_dir(outdir)
     fig = plt.figure(figsize=(9, 7))
     ax = fig.add_subplot(111, projection="3d")
@@ -150,7 +162,7 @@ def plot_range_vs_degree(rows: Iterable[dict], outdir: Path, tag: str,
 
 def plot_gains_vs_selectivity(S: NDArray[np.float64], g_opt: NDArray[np.float64],
                               outdir: Path, tag: str) -> None:
-    """Your 'gains vs selectivity bias' scatter (bwr colormap)."""
+    """'Gains vs selectivity bias' scatter (bwr colormap)."""
     _ensure_dir(outdir)
     color_diff = S[:, 1] - S[:, 0]
     fig = plt.figure(figsize=(6, 5))
@@ -164,4 +176,106 @@ def plot_gains_vs_selectivity(S: NDArray[np.float64], g_opt: NDArray[np.float64]
     png = outdir / f"{tag}_gains_vs_selectivity.png"
     pdf = outdir / f"{tag}_gains_vs_selectivity.pdf"
     plt.savefig(png, dpi=200); plt.savefig(pdf)
+    plt.close(fig)
+
+
+def plot_triad_three_panel(
+    Z_unmod, Z_color, Z_shape,
+    pca_components, target_vec_neuron,
+    d_color_unmod, d_color_opt, d_shape_unmod, d_shape_opt,
+    shape_vals, color_vals,
+    outdir: Path, tag: str,
+    *, zlim=None, elev=None, azim=None, show=False
+):
+    from matplotlib.lines import Line2D
+    _ensure_dir(outdir)
+    comps = pca_components[:3, :]
+    t_pc      = comps @ target_vec_neuron
+    col_pre   = comps @ d_color_unmod
+    col_post  = comps @ d_color_opt
+    shp_pre   = comps @ d_shape_unmod
+    shp_post  = comps @ d_shape_opt
+
+    color_list = np.array([c for _s in shape_vals for c in color_vals])
+
+    fig = plt.figure(figsize=(19, 5))
+    ax1 = fig.add_subplot(131, projection='3d')
+    ax2 = fig.add_subplot(132, projection='3d')
+    ax3 = fig.add_subplot(133, projection='3d')
+
+    sc1 = ax1.scatter(Z_unmod[:,0], Z_unmod[:,1], Z_unmod[:,2], c=color_list, cmap='viridis', s=20)
+    sc2 = ax2.scatter(Z_color[:,0],  Z_color[:,1],  Z_color[:,2],  c=color_list, cmap='viridis', s=20)
+    sc3 = ax3.scatter(Z_shape[:,0],  Z_shape[:,1],  Z_shape[:,2],  c=color_list, cmap='viridis', s=20)
+
+    # lines
+    line3d(ax1, t_pc,    color='crimson');    line3d(ax1, col_pre, color='black');     line3d(ax1, shp_pre, color='steelblue')
+    line3d(ax2, t_pc,    color='crimson');    line3d(ax2, col_post, color='darkorange')
+    line3d(ax3, t_pc,    color='crimson');    line3d(ax3, shp_post, color='seagreen')
+
+    for ax in (ax1, ax2, ax3):
+        ax.set_xlabel('PC1'); ax.set_ylabel('PC2'); ax.set_zlabel('PC3')
+        if zlim is not None: ax.set_zlim(zlim)
+        ax.set_box_aspect((1,1,1))
+        if (elev is not None) or (azim is not None):
+            ax.view_init(elev=elev if elev is not None else ax.elev,
+                         azim=azim if azim is not None else ax.azim)
+
+    ax1.set_title('Unmodulated (pre)')
+    ax2.set_title('Color-aligned (post)')
+    ax3.set_title('Shape-aligned (post)')
+
+    legend_elems = [
+        Line2D([0],[0], color='crimson',    lw=2, label='Target axis'),
+        Line2D([0],[0], color='black',      lw=2, label='Color axis (pre)'),
+        Line2D([0],[0], color='steelblue',  lw=2, label='Shape axis (pre)'),
+        Line2D([0],[0], color='darkorange', lw=2, label='Color axis (post)'),
+        Line2D([0],[0], color='seagreen',   lw=2, label='Shape axis (post)'),
+    ]
+    ax3.legend(handles=legend_elems, loc='upper right')
+
+    cb1 = fig.colorbar(sc1, ax=ax1, shrink=0.7); cb1.set_label('Color value')
+    cb2 = fig.colorbar(sc2, ax=ax2, shrink=0.7); cb2.set_label('Color value')
+    cb3 = fig.colorbar(sc3, ax=ax3, shrink=0.7); cb3.set_label('Color value')
+
+    plt.tight_layout()
+    out_png = outdir / f"{tag}_triad_threepanel.png"
+    out_pdf = outdir / f"{tag}_triad_threepanel.pdf"
+    plt.savefig(out_png, dpi=200); plt.savefig(out_pdf)
+    if show: plt.show()
+    plt.close(fig)
+
+def plot_gains_vs_selectivity_pair(
+    S: NDArray[np.float64], g_color: NDArray[np.float64], g_shape: NDArray[np.float64],
+    outdir: Path, tag: str, *,
+    mode: str = "ratio", logratio: bool = False, show: bool = False
+):
+    _ensure_dir(outdir)
+    color_diff = S[:,1] - S[:,0]
+    eps = 1e-12
+
+    if mode == "ratio":
+        y = (g_color + eps) / (g_shape + eps)
+        label = "Gain ratio (color / shape)"
+        if logratio:
+            # only safe if all positive; otherwise you’ll see negative/invalid logs
+            y = np.log2(y)
+            label = "log2 gain ratio (color / shape)"
+    elif mode == "diff":
+        y = g_color - g_shape
+        label = "Gain difference (color - shape)"
+    else:
+        raise ValueError("mode must be 'ratio' or 'diff'")
+
+    fig = plt.figure(figsize=(6, 5))
+    plt.scatter(color_diff, y, c=color_diff, cmap='bwr', alpha=0.7, edgecolors='none')
+    plt.xlabel('Color - Shape selectivity')
+    plt.ylabel(label)
+    plt.title('Gains comparison vs. selectivity')
+    cb = plt.colorbar(); cb.set_label('Color - Shape')
+    plt.grid(True, linestyle=':')
+    plt.tight_layout()
+    png = outdir / f"{tag}_gains_{mode}_color_over_shape.png"
+    pdf = outdir / f"{tag}_gains_{mode}_color_over_shape.pdf"
+    plt.savefig(png, dpi=200); plt.savefig(pdf)
+    if show: plt.show()
     plt.close(fig)

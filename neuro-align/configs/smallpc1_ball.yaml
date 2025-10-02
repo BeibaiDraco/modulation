@@ -22,7 +22,7 @@ objective:
 
 constraints:
   type: ball            # or "box"
-  radius: 0.12          # L2 ball radius = 0.12 * sqrt(N)
+  radius: 0.05          # L2 ball radius = 0.10 * sqrt(N)
   box_half_width: 0.2   # used if type: box
   hard_norm: true       # keep ||axis|| equal to baseline
   positive_gains: false # set true to force g >= 0

@@ -1,5 +1,5 @@
 {
-  "constraint_type": "ball",
+  "constraint_type": "box",
   "hard_norm": true,
   "ranges": [
     0.02,
@@ -12,38 +12,38 @@
     {
       "range": 0.02,
       "unmod_to_target_deg": 98.19847120987204,
-      "opt_to_target_deg": 106.8564077572451,
-      "delta_opt_vs_unmod_deg": 17.144205862549256,
+      "opt_to_target_deg": 103.95026161834869,
+      "delta_opt_vs_unmod_deg": 11.79940784021073,
       "success": true
     },
     {
       "range": 0.04,
       "unmod_to_target_deg": 98.19847120987204,
-      "opt_to_target_deg": 113.07111425800069,
-      "delta_opt_vs_unmod_deg": 27.08142740655901,
+      "opt_to_target_deg": 109.11486692446306,
+      "delta_opt_vs_unmod_deg": 21.01604542477183,
       "success": true
     },
     {
       "range": 0.08,
       "unmod_to_target_deg": 98.19847120987204,
-      "opt_to_target_deg": 122.14720358949133,
-      "delta_opt_vs_unmod_deg": 40.407273607521525,
+      "opt_to_target_deg": 116.76117443310463,
+      "delta_opt_vs_unmod_deg": 32.70703784594245,
       "success": true
     },
     {
       "range": 0.12,
       "unmod_to_target_deg": 98.19847120987204,
-      "opt_to_target_deg": 129.0065893305767,
-      "delta_opt_vs_unmod_deg": 50.101996157959775,
+      "opt_to_target_deg": 122.74296384854613,
+      "delta_opt_vs_unmod_deg": 41.02334400439469,
       "success": true
     },
     {
       "range": 0.16,
       "unmod_to_target_deg": 98.19847120987204,
-      "opt_to_target_deg": 134.52119578987862,
-      "delta_opt_vs_unmod_deg": 57.60820499182802,
+      "opt_to_target_deg": 127.59162403424533,
+      "delta_opt_vs_unmod_deg": 47.188292869767444,
       "success": true
     }
   ],
-  "tag": "default_smallpc1_custom"
+  "tag": "smallpc1_custom_box"
 }
