@@ -27,6 +27,13 @@ constraints:
   hard_norm: true       # keep ||axis|| equal to baseline
   positive_gains: false # set true to force g >= 0
 
+shuffle:
+  enabled: true
+  num_bins: 10          # quantile bins by default
+  binning: quantile     # or "equal"
+  mode: independent     # or "paired"
+  seed: 1234            # optional; default = network.seed + 101
+
 grid:
   shape_vals: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
   color_vals: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]

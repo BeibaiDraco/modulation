@@ -29,7 +29,7 @@ def load_config(path: Path) -> ExperimentConfig:
     import yaml
     from .config import (
         ExperimentConfig, NetworkConfig, ObjectiveConfig, ConstraintConfig, GridConfig,
-        TargetType, AxisOfInterest, ConstraintType, WRNormalization
+        TargetType, AxisOfInterest, ConstraintType, WRNormalization, ShuffleConfig
     )
 
     def _enum(enum_cls, v, *, tolower=True):
@@ -69,12 +69,18 @@ def load_config(path: Path) -> ExperimentConfig:
         craw["type"] = _enum(ConstraintType, craw["type"])
     con = ConstraintConfig(**craw)
 
+    
     # --- Grid ---
     grd = GridConfig(**raw.get("grid", {}))
 
+    # --- Shuffle ---
+    shraw = dict(raw.get("shuffle", {}))
+    shuf = ShuffleConfig(**shraw)
+
     tag = raw.get("tag", "experiment")
     save_dir = raw.get("save_dir", "outputs")
-    return ExperimentConfig(network=net, objective=obj, constraints=con, grid=grd, tag=tag, save_dir=save_dir)
+    return ExperimentConfig(network=net, objective=obj, constraints=con, grid=grd,
+                            tag=tag, save_dir=save_dir, shuffle=shuf) 
 
 def cmd_run(args):
     cfg = load_config(Path(args.config))
@@ -139,11 +145,22 @@ def cmd_triad(args):
 def cmd_triad_sweep(args):
     cfg = load_config(Path(args.config))
     ranges = [float(x) for x in args.ranges]
+    # optional CLI overrides
+    if args.no_shuffle:
+        cfg.shuffle.enabled = False
+    if args.shuffle_bins is not None:
+        cfg.shuffle.num_bins = int(args.shuffle_bins)
+    if args.shuffle_mode is not None:
+        cfg.shuffle.mode = args.shuffle_mode
+    if args.shuffle_seed is not None:
+        cfg.shuffle.seed = int(args.shuffle_seed)
+
     res = triad_sweep(cfg, ranges)
     outdir = Path(cfg.save_dir) / (cfg.tag + "_triad_sweep")
     outdir.mkdir(parents=True, exist_ok=True)
     save_json(res, outdir / f"{cfg.tag}_triad_sweep.json")
     plot_triad_cross_sweep(res["rows"], outdir, cfg.tag)
+
 
 
 def main():
@@ -183,10 +200,16 @@ def main():
                     help="Use log2 for the ratio plot (only sensible if gains are positive)")
     pt.set_defaults(func=cmd_triad)
     
-    pts = sub.add_parser("triad-sweep", help="Sweep range and plot cross-attend angles (color/shape)")
+
+    pts = sub.add_parser("triad-sweep", help="Sweep range and plot cross-attend angles (with shuffled null)")
     pts.add_argument("--config", required=True)
     pts.add_argument("--ranges", nargs="+", required=True, help="List of range values")
+    pts.add_argument("--no-shuffle", action="store_true", help="Disable shuffle test")
+    pts.add_argument("--shuffle-bins", type=int, help="Number of selectivity bins (default: 10)")
+    pts.add_argument("--shuffle-mode", choices=["independent","paired"], help="Shuffle independently or as pairs")
+    pts.add_argument("--shuffle-seed", type=int, help="Seed for shuffle RNG")
     pts.set_defaults(func=cmd_triad_sweep)
+
 
 
 

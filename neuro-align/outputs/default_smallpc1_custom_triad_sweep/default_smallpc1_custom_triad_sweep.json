@@ -6,84 +6,61 @@
     0.04,
     0.08,
     0.12,
-    0.16,
-    0.5,
-    0.6,
-    0.7,
-    1.0,
-    2.0
+    0.16
   ],
   "rows": [
     {
       "range": 0.02,
-      "color_cross_attend_deg": 10.114358126445333,
-      "shape_cross_attend_deg": 8.476887744378846,
+      "color_cross_attend_deg": 8.940520701657373,
+      "shape_cross_attend_deg": 10.556260315258433,
       "success_color": true,
-      "success_shape": true
+      "success_shape": true,
+      "color_cross_attend_deg_shuf": 2.2887293097108876,
+      "shape_cross_attend_deg_shuf": 4.423618648496464
     },
     {
       "range": 0.04,
-      "color_cross_attend_deg": 16.851720584640265,
-      "shape_cross_attend_deg": 14.322515777989596,
+      "color_cross_attend_deg": 14.682032437885598,
+      "shape_cross_attend_deg": 19.454407382455198,
       "success_color": true,
-      "success_shape": true
+      "success_shape": true,
+      "color_cross_attend_deg_shuf": 4.7236552292666225,
+      "shape_cross_attend_deg_shuf": 8.673633376663648
     },
     {
       "range": 0.08,
-      "color_cross_attend_deg": 27.25865931584991,
-      "shape_cross_attend_deg": 17.29632207792688,
+      "color_cross_attend_deg": 19.938082370590102,
+      "shape_cross_attend_deg": 32.17879988354304,
       "success_color": true,
-      "success_shape": true
+      "success_shape": true,
+      "color_cross_attend_deg_shuf": 9.81614986638531,
+      "shape_cross_attend_deg_shuf": 15.921801620520439
     },
     {
       "range": 0.12,
-      "color_cross_attend_deg": 37.352932310622485,
-      "shape_cross_attend_deg": 19.004235274574082,
+      "color_cross_attend_deg": 23.563408977079725,
+      "shape_cross_attend_deg": 41.88728589011128,
       "success_color": true,
-      "success_shape": true
+      "success_shape": true,
+      "color_cross_attend_deg_shuf": 12.573797173970393,
+      "shape_cross_attend_deg_shuf": 21.03524150431178
     },
     {
       "range": 0.16,
-      "color_cross_attend_deg": 45.096157298644,
-      "shape_cross_attend_deg": 20.41510488670291,
+      "color_cross_attend_deg": 26.418865364942807,
+      "shape_cross_attend_deg": 49.631823596200896,
       "success_color": true,
-      "success_shape": true
-    },
-    {
-      "range": 0.5,
-      "color_cross_attend_deg": 83.14543788647448,
-      "shape_cross_attend_deg": 26.592984384509254,
-      "success_color": true,
-      "success_shape": false
-    },
-    {
-      "range": 0.6,
-      "color_cross_attend_deg": 87.97757378032462,
-      "shape_cross_attend_deg": 27.36672642416099,
-      "success_color": true,
-      "success_shape": false
-    },
-    {
-      "range": 0.7,
-      "color_cross_attend_deg": 91.20736624659007,
-      "shape_cross_attend_deg": 27.70040273777723,
-      "success_color": true,
-      "success_shape": false
-    },
-    {
-      "range": 1.0,
-      "color_cross_attend_deg": 94.58997791617566,
-      "shape_cross_attend_deg": 28.323993801790813,
-      "success_color": true,
-      "success_shape": false
-    },
-    {
-      "range": 2.0,
-      "color_cross_attend_deg": 94.20656826254205,
-      "shape_cross_attend_deg": 36.519548663460185,
-      "success_color": false,
-      "success_shape": false
+      "success_shape": true,
+      "color_cross_attend_deg_shuf": 14.395523150689275,
+      "shape_cross_attend_deg_shuf": 24.403616502395277
     }
   ],
-  "tag": "default_smallpc1_custom"
+  "tag": "default_smallpc1_custom",
+  "shuffle": {
+    "enabled": true,
+    "num_bins": 10,
+    "binning": "quantile",
+    "mode": "independent",
+    "seed": 1234
+  }
 }

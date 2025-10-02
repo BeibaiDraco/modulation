@@ -6,15 +6,13 @@ import json
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import minimize
-from .config import ExperimentConfig, ConstraintType
-from .network import LinearRNN, angle_deg
-from .objectives import target_in_neuron_space, axis_of_interest_vec, angle_to_target
-from .constraints import build_bounds_and_constraints
-from .config import ExperimentConfig, ConstraintType, AxisOfInterest
+
 from .config import ExperimentConfig, ConstraintType, AxisOfInterest
 from .network import LinearRNN, angle_deg
 from .objectives import target_in_neuron_space, axis_of_interest_vec, angle_to_target
 from .constraints import build_bounds_and_constraints
+from .shuffle import assign_bins, shuffle_within_bins, shuffle_pair_within_bins
+
 
 def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
@@ -187,8 +185,6 @@ def _optimize_axis_with_shared_pca(net, pca, target, cfg, axis_choice: AxisOfInt
     Optimize gains for one axis (COLOR or SHAPE) using the PCA basis fitted on UNMOD.
     Returns a dict with metrics, and arrays for plotting.
     """
-    import numpy as np
-    from scipy.optimize import minimize
 
     N = cfg.network.N
     g0 = np.ones(N)
@@ -323,9 +319,53 @@ def optimize_triad(cfg):
     color_cross_attend_deg = angle_deg(color_axis_color_g, color_axis_shape_g)
     shape_cross_attend_deg = angle_deg(shape_axis_color_g, shape_axis_shape_g)
 
+    # ---------- Shuffle test ----------
+    shuffle_cfg = cfg.shuffle
+    shuffle_summary = None
+    if shuffle_cfg.enabled:
+        rng = np.random.default_rng(shuffle_cfg.seed if shuffle_cfg.seed is not None else (cfg.network.seed + 101))
+        sel = net.S[:, 1] - net.S[:, 0]                   # color - shape selectivity
+        bins = assign_bins(sel, shuffle_cfg.num_bins, shuffle_cfg.binning)
+
+        if shuffle_cfg.mode == "paired":
+            g_color_shuf, g_shape_shuf = shuffle_pair_within_bins(g_color, g_shape, bins, rng)
+        else:  # independent (default)
+            g_color_shuf = shuffle_within_bins(g_color, bins, rng)
+            g_shape_shuf = shuffle_within_bins(g_shape, bins, rng)
+
+        # axes under shuffled gains
+        col_axis_color_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_color_shuf)
+        col_axis_shape_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape_shuf)
+        shp_axis_color_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color_shuf)
+        shp_axis_shape_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape_shuf)
+
+        color_cross_attend_deg_shuf = angle_deg(col_axis_color_g_shuf, col_axis_shape_g_shuf)
+        shape_cross_attend_deg_shuf = angle_deg(shp_axis_color_g_shuf, shp_axis_shape_g_shuf)
+
+        shuffle_summary = {
+            "mode": shuffle_cfg.mode,
+            "num_bins": int(shuffle_cfg.num_bins),
+            "binning": shuffle_cfg.binning,
+            "seed": shuffle_cfg.seed if shuffle_cfg.seed is not None else (cfg.network.seed + 101),
+            "cross_attend": {
+                "color_axis_angle_deg": float(color_cross_attend_deg_shuf),
+                "shape_axis_angle_deg": float(shape_cross_attend_deg_shuf),
+            },
+            "axis_norms": {
+                "color_axis": {
+                    "under_color_attend_shuf": float(np.linalg.norm(col_axis_color_g_shuf)),
+                    "under_shape_attend_shuf": float(np.linalg.norm(col_axis_shape_g_shuf)),
+                },
+                "shape_axis": {
+                    "under_color_attend_shuf": float(np.linalg.norm(shp_axis_color_g_shuf)),
+                    "under_shape_attend_shuf": float(np.linalg.norm(shp_axis_shape_g_shuf)),
+                }
+            }
+        }
+
+
 
     # summarized comparison of gains (safe if positive_gains=True; otherwise ratio may be negative)
-    import numpy as np
     eps = 1e-12
     gain_ratio = (g_color + eps) / (g_shape + eps)
     gain_diff  = g_color - g_shape
@@ -374,8 +414,11 @@ def optimize_triad(cfg):
             "under_color_attend": float(np.linalg.norm(shape_axis_color_g)),
             "under_shape_attend": float(np.linalg.norm(shape_axis_shape_g)),
         },
-    },
+        },
+         "shuffle": shuffle_summary,
     }
+
+    
 
     return (
         summary, net, pca, Z0, Z_color, Z_shape,
@@ -419,6 +462,7 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
     Sweep constraint magnitude and record cross-attend angles:
       - color_cross_attend_deg: angle between color axis under (color gains) vs (shape gains)
       - shape_cross_attend_deg: angle between shape axis under (color gains) vs (shape gains)
+      - *_shuf (if present): same angles after bin-based gain shuffling
     """
     rows = []
     for r in ranges:
@@ -431,18 +475,35 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
         (summary, net, pca, Z0, Zc, Zs,
          dcol0, dcol1, dshp0, dshp1, target, gcol, gshp) = optimize_triad(local)
 
-        rows.append({
+        row = {
             "range": r,
             "color_cross_attend_deg": summary["cross_attend"]["color_axis_angle_deg"],
             "shape_cross_attend_deg": summary["cross_attend"]["shape_axis_angle_deg"],
             "success_color": summary["color_alignment"]["success"],
             "success_shape": summary["shape_alignment"]["success"],
-        })
+        }
+
+        # <- NEW: include shuffled angles when optimize_triad produced them
+        shuf = summary.get("shuffle")
+        if shuf and shuf.get("cross_attend"):
+            row["color_cross_attend_deg_shuf"] = shuf["cross_attend"]["color_axis_angle_deg"]
+            row["shape_cross_attend_deg_shuf"] = shuf["cross_attend"]["shape_axis_angle_deg"]
+
+        rows.append(row)
 
     return {
         "constraint_type": getattr(cfg.constraints.type, "value", cfg.constraints.type),
         "hard_norm": bool(cfg.constraints.hard_norm),
         "ranges": ranges,
         "rows": rows,
-        "tag": cfg.tag
+        "tag": cfg.tag,
+        # echo sweep-level shuffle settings so you can see how rows were produced
+        "shuffle": {
+            "enabled": bool(cfg.shuffle.enabled),
+            "num_bins": int(cfg.shuffle.num_bins),
+            "binning": cfg.shuffle.binning,
+            "mode": cfg.shuffle.mode,
+            "seed": cfg.shuffle.seed,
+        },
     }
+

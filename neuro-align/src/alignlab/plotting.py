@@ -300,3 +300,31 @@ def plot_triad_cross_sweep(rows, outdir: Path, tag: str, ylabel: str = "Cross-at
     pdf = outdir / f"{tag}_triad_cross_sweep.pdf"
     plt.savefig(png, dpi=200); plt.savefig(pdf)
     plt.close(fig)
+
+def plot_triad_cross_sweep(rows, outdir: Path, tag: str, ylabel: str = "Cross-attend angle (deg)") -> None:
+    _ensure_dir(outdir)
+    xs = [r["range"] for r in rows]
+    ys_color = [r["color_cross_attend_deg"] for r in rows]
+    ys_shape = [r["shape_cross_attend_deg"] for r in rows]
+    has_shuf = "color_cross_attend_deg_shuf" in rows[0]
+
+    fig = plt.figure(figsize=(7.0, 4.8))
+    plt.plot(xs, ys_color, marker="o", label="Color cross-attend")
+    plt.plot(xs, ys_shape, marker="s", label="Shape cross-attend")
+
+    if has_shuf:
+        ys_color_shuf = [r["color_cross_attend_deg_shuf"] for r in rows]
+        ys_shape_shuf = [r["shape_cross_attend_deg_shuf"] for r in rows]
+        plt.plot(xs, ys_color_shuf, marker="^", linestyle="--", label="Color cross-attend (shuffled)")
+        plt.plot(xs, ys_shape_shuf, marker="v", linestyle="--", label="Shape cross-attend (shuffled)")
+
+    plt.xlabel("Constraint range")
+    plt.ylabel(ylabel)
+    plt.title(f"Cross-attend angles vs range — {tag}")
+    plt.grid(True, linestyle=":")
+    plt.legend()
+    plt.tight_layout()
+    png = outdir / f"{tag}_triad_cross_sweep.png"
+    pdf = outdir / f"{tag}_triad_cross_sweep.pdf"
+    plt.savefig(png, dpi=200); plt.savefig(pdf)
+    plt.close(fig)

@@ -59,6 +59,14 @@ class GridConfig:
     color_vals: Sequence[float] = (0.0, 0.33, 0.66, 1.0)
 
 @dataclass
+class ShuffleConfig:
+    enabled: bool = True
+    num_bins: int = 10
+    binning: str = "quantile"      # "quantile" or "equal"
+    mode: str = "independent"      # "independent" or "paired"
+    seed: Optional[int] = None     # if None, will use network.seed + 101
+
+@dataclass
 class ExperimentConfig:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     objective: ObjectiveConfig = field(default_factory=ObjectiveConfig)
@@ -66,3 +74,5 @@ class ExperimentConfig:
     grid: GridConfig = field(default_factory=GridConfig)
     save_dir: str = "outputs"
     tag: str = "default_smallpc1_custom"
+    shuffle: ShuffleConfig = field(default_factory=ShuffleConfig)  
+
