@@ -279,3 +279,24 @@ def plot_gains_vs_selectivity_pair(
     plt.savefig(png, dpi=200); plt.savefig(pdf)
     if show: plt.show()
     plt.close(fig)
+
+
+def plot_triad_cross_sweep(rows, outdir: Path, tag: str, ylabel: str = "Cross-attend angle (deg)") -> None:
+    _ensure_dir(outdir)
+    xs = [r["range"] for r in rows]
+    ys_color = [r["color_cross_attend_deg"] for r in rows]
+    ys_shape = [r["shape_cross_attend_deg"] for r in rows]
+
+    fig = plt.figure(figsize=(6.5, 4.5))
+    plt.plot(xs, ys_color, marker="o", label="Color axis (color vs shape gains)")
+    plt.plot(xs, ys_shape, marker="s", label="Shape axis (color vs shape gains)")
+    plt.xlabel("Constraint range")
+    plt.ylabel(ylabel)
+    plt.title(f"Cross-attend angles vs range — {tag}")
+    plt.grid(True, linestyle=":")
+    plt.legend()
+    plt.tight_layout()
+    png = outdir / f"{tag}_triad_cross_sweep.png"
+    pdf = outdir / f"{tag}_triad_cross_sweep.pdf"
+    plt.savefig(png, dpi=200); plt.savefig(pdf)
+    plt.close(fig)

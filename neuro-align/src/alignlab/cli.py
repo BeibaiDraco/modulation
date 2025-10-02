@@ -15,6 +15,15 @@ from .plotting import (
     plot_triad_three_panel, plot_gains_vs_selectivity_pair  # NEW
 )
 
+from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_triad, triad_sweep
+from .plotting import (
+    plot_original_two_panel, plot_embedding_3d,
+    plot_range_vs_degree, plot_gains_vs_selectivity,
+    plot_triad_three_panel, plot_gains_vs_selectivity_pair,
+    plot_triad_cross_sweep,   # NEW
+)
+
+
 
 def load_config(path: Path) -> ExperimentConfig:
     import yaml
@@ -126,6 +135,16 @@ def cmd_triad(args):
         net.S, gcol, gshp, outdir, cfg.tag,
         mode=args.gcompare, logratio=args.logratio, show=args.show
     )
+    
+def cmd_triad_sweep(args):
+    cfg = load_config(Path(args.config))
+    ranges = [float(x) for x in args.ranges]
+    res = triad_sweep(cfg, ranges)
+    outdir = Path(cfg.save_dir) / (cfg.tag + "_triad_sweep")
+    outdir.mkdir(parents=True, exist_ok=True)
+    save_json(res, outdir / f"{cfg.tag}_triad_sweep.json")
+    plot_triad_cross_sweep(res["rows"], outdir, cfg.tag)
+
 
 def main():
     p = argparse.ArgumentParser(prog="alignlab", description="PC alignment experiments")
@@ -163,6 +182,12 @@ def main():
     pt.add_argument("--logratio", action="store_true",
                     help="Use log2 for the ratio plot (only sensible if gains are positive)")
     pt.set_defaults(func=cmd_triad)
+    
+    pts = sub.add_parser("triad-sweep", help="Sweep range and plot cross-attend angles (color/shape)")
+    pts.add_argument("--config", required=True)
+    pts.add_argument("--ranges", nargs="+", required=True, help="List of range values")
+    pts.set_defaults(func=cmd_triad_sweep)
+
 
 
     args = p.parse_args()

@@ -11,6 +11,10 @@ from .network import LinearRNN, angle_deg
 from .objectives import target_in_neuron_space, axis_of_interest_vec, angle_to_target
 from .constraints import build_bounds_and_constraints
 from .config import ExperimentConfig, ConstraintType, AxisOfInterest
+from .config import ExperimentConfig, ConstraintType, AxisOfInterest
+from .network import LinearRNN, angle_deg
+from .objectives import target_in_neuron_space, axis_of_interest_vec, angle_to_target
+from .constraints import build_bounds_and_constraints
 
 def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
@@ -307,6 +311,18 @@ def optimize_triad(cfg):
     out_shape, g_shape, d_shape0, d_shape_opt, Z_shape = _optimize_axis_with_shared_pca(
         net, pca, target, cfg, AxisOfInterest.SHAPE
     )
+    
+    # cross-attend axes: evaluate the same axis under the other attention's gains
+    color_axis_color_g = net.color_axis(cfg.objective.shape_for_color_line, g=g_color)  # color axis under color gains
+    color_axis_shape_g = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape)  # color axis under shape gains
+
+    shape_axis_color_g = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color)  # shape axis under color gains
+    shape_axis_shape_g = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape)  # shape axis under shape gains
+
+    # cross-attend angles
+    color_cross_attend_deg = angle_deg(color_axis_color_g, color_axis_shape_g)
+    shape_cross_attend_deg = angle_deg(shape_axis_color_g, shape_axis_shape_g)
+
 
     # summarized comparison of gains (safe if positive_gains=True; otherwise ratio may be negative)
     import numpy as np
@@ -347,6 +363,18 @@ def optimize_triad(cfg):
             "grid": {"shape_vals": tuple(cfg.grid.shape_vals), "color_vals": tuple(cfg.grid.color_vals)},
             "tag": cfg.tag,
         },
+        "cross_attend": {
+        "color_axis_angle_deg": float(color_cross_attend_deg),
+        "shape_axis_angle_deg": float(shape_cross_attend_deg),
+        "color_axis_norms": {
+            "under_color_attend": float(np.linalg.norm(color_axis_color_g)),
+            "under_shape_attend": float(np.linalg.norm(color_axis_shape_g)),
+        },
+        "shape_axis_norms": {
+            "under_color_attend": float(np.linalg.norm(shape_axis_color_g)),
+            "under_shape_attend": float(np.linalg.norm(shape_axis_shape_g)),
+        },
+    },
     }
 
     return (
@@ -385,3 +413,36 @@ def save_json(obj: dict, path: Path) -> None:
     _ensure_dir(path.parent)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2)
+
+def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
+    """
+    Sweep constraint magnitude and record cross-attend angles:
+      - color_cross_attend_deg: angle between color axis under (color gains) vs (shape gains)
+      - shape_cross_attend_deg: angle between shape axis under (color gains) vs (shape gains)
+    """
+    rows = []
+    for r in ranges:
+        local = cfg  # shallow copy ok
+        if cfg.constraints.type == ConstraintType.BALL:
+            local.constraints.radius = r
+        else:
+            local.constraints.box_half_width = r
+
+        (summary, net, pca, Z0, Zc, Zs,
+         dcol0, dcol1, dshp0, dshp1, target, gcol, gshp) = optimize_triad(local)
+
+        rows.append({
+            "range": r,
+            "color_cross_attend_deg": summary["cross_attend"]["color_axis_angle_deg"],
+            "shape_cross_attend_deg": summary["cross_attend"]["shape_axis_angle_deg"],
+            "success_color": summary["color_alignment"]["success"],
+            "success_shape": summary["shape_alignment"]["success"],
+        })
+
+    return {
+        "constraint_type": getattr(cfg.constraints.type, "value", cfg.constraints.type),
+        "hard_norm": bool(cfg.constraints.hard_norm),
+        "ranges": ranges,
+        "rows": rows,
+        "tag": cfg.tag
+    }

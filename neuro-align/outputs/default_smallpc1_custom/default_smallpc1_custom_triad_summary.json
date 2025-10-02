@@ -158,5 +158,17 @@
       ]
     },
     "tag": "default_smallpc1_custom"
+  },
+  "cross_attend": {
+    "color_axis_angle_deg": 19.501329774179833,
+    "shape_axis_angle_deg": 15.641310233189666,
+    "color_axis_norms": {
+      "under_color_attend": 7.5540179561386,
+      "under_shape_attend": 8.001717248555007
+    },
+    "shape_axis_norms": {
+      "under_color_attend": 8.329174511421614,
+      "under_shape_attend": 7.632282775806677
+    }
   }
 }
