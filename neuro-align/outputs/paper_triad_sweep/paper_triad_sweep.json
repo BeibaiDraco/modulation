@@ -1,0 +1,136 @@
+{
+  "constraint_type": "ball",
+  "hard_norm": true,
+  "ranges": [
+    0.02,
+    0.04,
+    0.06,
+    0.08,
+    0.1,
+    0.14,
+    0.18,
+    0.22,
+    0.26,
+    0.3
+  ],
+  "rows": [
+    {
+      "range": 0.02,
+      "color_cross_attend_deg": 23.478686323304675,
+      "shape_cross_attend_deg": 18.098414881501125,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 4.383407263108021,
+      "shape_cross_attend_deg_shuf_mean": 3.2660697435996244,
+      "color_cross_attend_deg_shuf_sem": 0.21832880322897605,
+      "shape_cross_attend_deg_shuf_sem": 0.14856568239289186
+    },
+    {
+      "range": 0.04,
+      "color_cross_attend_deg": 37.33974148729518,
+      "shape_cross_attend_deg": 28.91340091438807,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 8.660595959717789,
+      "shape_cross_attend_deg_shuf_mean": 5.938073214994408,
+      "color_cross_attend_deg_shuf_sem": 0.3987893132258797,
+      "shape_cross_attend_deg_shuf_sem": 0.25311341205840965
+    },
+    {
+      "range": 0.06,
+      "color_cross_attend_deg": 47.00946642533612,
+      "shape_cross_attend_deg": 35.994546267586045,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 12.653842472905648,
+      "shape_cross_attend_deg_shuf_mean": 8.290578745397475,
+      "color_cross_attend_deg_shuf_sem": 0.5777698347584431,
+      "shape_cross_attend_deg_shuf_sem": 0.342131852874016
+    },
+    {
+      "range": 0.08,
+      "color_cross_attend_deg": 54.52034536201729,
+      "shape_cross_attend_deg": 40.86547297061544,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 16.345538883507025,
+      "shape_cross_attend_deg_shuf_mean": 10.389025174803955,
+      "color_cross_attend_deg_shuf_sem": 0.7493045303536399,
+      "shape_cross_attend_deg_shuf_sem": 0.4248264646261174
+    },
+    {
+      "range": 0.1,
+      "color_cross_attend_deg": 60.744452278849934,
+      "shape_cross_attend_deg": 44.36672379048507,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 19.754930529732118,
+      "shape_cross_attend_deg_shuf_mean": 12.308773157774572,
+      "color_cross_attend_deg_shuf_sem": 0.904193771997683,
+      "shape_cross_attend_deg_shuf_sem": 0.5010834641529781
+    },
+    {
+      "range": 0.14,
+      "color_cross_attend_deg": 70.92574566312246,
+      "shape_cross_attend_deg": 49.07150132124679,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 25.88683229869671,
+      "shape_cross_attend_deg_shuf_mean": 15.817394536529882,
+      "color_cross_attend_deg_shuf_sem": 1.159553843518846,
+      "shape_cross_attend_deg_shuf_sem": 0.6317183452867152
+    },
+    {
+      "range": 0.18,
+      "color_cross_attend_deg": 79.35606966663681,
+      "shape_cross_attend_deg": 52.10661869650889,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 31.39432229637847,
+      "shape_cross_attend_deg_shuf_mean": 19.020623030795573,
+      "color_cross_attend_deg_shuf_sem": 1.360498402955677,
+      "shape_cross_attend_deg_shuf_sem": 0.7304628088449787
+    },
+    {
+      "range": 0.22,
+      "color_cross_attend_deg": 86.78287061410207,
+      "shape_cross_attend_deg": 54.183457575574124,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 36.54468247875339,
+      "shape_cross_attend_deg_shuf_mean": 21.951576251688365,
+      "color_cross_attend_deg_shuf_sem": 1.5293923590833465,
+      "shape_cross_attend_deg_shuf_sem": 0.8065898036929748
+    },
+    {
+      "range": 0.26,
+      "color_cross_attend_deg": 93.5869348167101,
+      "shape_cross_attend_deg": 55.6089381201317,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 41.49842899439096,
+      "shape_cross_attend_deg_shuf_mean": 24.614245125612037,
+      "color_cross_attend_deg_shuf_sem": 1.6802318820162536,
+      "shape_cross_attend_deg_shuf_sem": 0.8740900074860994
+    },
+    {
+      "range": 0.3,
+      "color_cross_attend_deg": 100.02073862764878,
+      "shape_cross_attend_deg": 56.544511055328755,
+      "success_color": true,
+      "success_shape": true,
+      "color_cross_attend_deg_shuf_mean": 46.33945885728301,
+      "shape_cross_attend_deg_shuf_mean": 27.023411149719742,
+      "color_cross_attend_deg_shuf_sem": 1.820653826911308,
+      "shape_cross_attend_deg_shuf_sem": 0.9363987923581893
+    }
+  ],
+  "tag": "paper",
+  "shuffle": {
+    "enabled": true,
+    "num_bins": 8,
+    "binning": "quantile",
+    "mode": "independent",
+    "seed": 2025
+  }
+}

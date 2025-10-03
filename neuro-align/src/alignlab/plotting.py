@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from numpy.typing import NDArray
+import colorsys, json
 
 def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
@@ -328,3 +329,207 @@ def plot_triad_cross_sweep(rows, outdir: Path, tag: str, ylabel: str = "Cross-at
     pdf = outdir / f"{tag}_triad_cross_sweep.pdf"
     plt.savefig(png, dpi=200); plt.savefig(pdf)
     plt.close(fig)
+
+
+
+
+def _save_csv(path: Path, header: list[str], rows: list[tuple]) -> None:
+    _ensure_dir(path.parent)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(",".join(header) + "\n")
+        for r in rows:
+            f.write(",".join(str(x) for x in r) + "\n")
+
+def _save_json(path: Path, obj: dict) -> None:
+    _ensure_dir(path.parent)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+
+def bivariate_colors(shape_list, color_list):
+    shape = np.asarray(shape_list, dtype=float)
+    color = np.asarray(color_list, dtype=float)
+    L = np.clip(0.35 + 0.45 * shape, 0.0, 1.0)   # lightness encodes shape
+    S = 0.90 * np.ones_like(L)                   # fixed saturation
+    H = np.mod(color, 1.0)                       # hue encodes color
+    rgb = [colorsys.hls_to_rgb(h, l, s) for h, l, s in zip(H, L, S)]
+    return np.asarray(rgb)
+
+def draw_bivariate_legend(fig, ax, *, loc=(0.72, 0.68, 0.24, 0.24)):
+    N = 64
+    xs = np.linspace(0, 1, N)   # color
+    ys = np.linspace(0, 1, N)   # shape
+    grid = np.zeros((N, N, 3))
+    for i, y in enumerate(ys):
+        row = bivariate_colors(np.full(N, y), xs)
+        grid[N - 1 - i, :, :] = row  # shape increases upward
+    a = fig.add_axes(loc)
+    a.imshow(grid, origin="lower", extent=(0,1,0,1))
+    a.set_xticks([0,1]); a.set_yticks([0,1])
+    a.set_xticklabels(["0","1"], fontsize=8)
+    a.set_yticklabels(["0","1"], fontsize=8)
+    a.set_xlabel("color", fontsize=9)
+    a.set_ylabel("shape", fontsize=9)
+    a.tick_params(length=2, pad=2)
+    for s in a.spines.values():
+        s.set_linewidth(0.8)
+
+def plot_panel_b(
+    Z_color, Z_shape,
+    pca_components,
+    target_vec_neuron,
+    color_axis_color, color_axis_shape,
+    shape_axis_color, shape_axis_shape,
+    shape_vals, color_vals,
+    outdir: Path,
+    *, zlim=None, elev=None, azim=None, show=False
+):
+    _ensure_dir(outdir)
+    comps = pca_components[:3, :]
+    t_pc   = comps @ target_vec_neuron
+    col_c  = comps @ color_axis_color
+    col_s  = comps @ color_axis_shape
+    shp_s  = comps @ shape_axis_shape
+    shp_c  = comps @ shape_axis_color
+
+    shape_list = np.array([s for s in shape_vals for _c in color_vals], dtype=float)
+    color_list = np.array([c for _s in shape_vals for c in color_vals], dtype=float)
+    bicolors = bivariate_colors(shape_list, color_list)
+
+    fig = plt.figure(figsize=(7.5, 6.5))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.scatter(Z_color[:,0], Z_color[:,1], Z_color[:,2],
+               s=22, marker='o', c=bicolors, edgecolors='none', alpha=0.95, label="color-attend")
+    ax.scatter(Z_shape[:,0], Z_shape[:,1], Z_shape[:,2],
+               s=22, marker='^', c=bicolors, edgecolors='none', alpha=0.95, label="shape-attend")
+
+    line3d(ax, t_pc, two_sided=False, linewidth=2.5, color='crimson')
+    ax.plot([0, col_c[0]], [0, col_c[1]], [0, col_c[2]], lw=2.2, color='darkorange', label="color axis (color)")
+    ax.plot([0, col_s[0]], [0, col_s[1]], [0, col_s[2]], lw=2.2, color='darkorange', ls='--', label="color axis (shape)")
+    ax.plot([0, shp_s[0]], [0, shp_s[1]], [0, shp_s[2]], lw=2.2, color='seagreen',  label="shape axis (shape)")
+    ax.plot([0, shp_c[0]], [0, shp_c[1]], [0, shp_c[2]], lw=2.2, color='seagreen',  ls='--', label="shape axis (color)")
+
+    if zlim is not None:
+        ax.set_zlim(zlim)
+    ax.set_box_aspect((1,1,1))
+    ax.set_xlabel('PC1'); ax.set_ylabel('PC2'); ax.set_zlabel('PC3')
+
+    if (elev is not None) or (azim is not None):
+        ax.view_init(elev=elev if elev is not None else ax.elev,
+                     azim=azim if azim is not None else ax.azim)
+
+    from matplotlib.lines import Line2D
+    legend_elems = [
+        Line2D([0],[0], color='crimson',    lw=2.5, label='Target'),
+        Line2D([0],[0], color='darkorange', lw=2.2, label='Color axis (color)'),
+        Line2D([0],[0], color='darkorange', lw=2.2, ls='--', label='Color axis (shape)'),
+        Line2D([0],[0], color='seagreen',   lw=2.2, label='Shape axis (shape)'),
+        Line2D([0],[0], color='seagreen',   lw=2.2, ls='--', label='Shape axis (color)'),
+    ]
+    ax.legend(handles=legend_elems, loc='upper right', frameon=True, fontsize=9)
+
+    draw_bivariate_legend(fig, ax)
+    plt.tight_layout()
+    for ext in ("png","pdf","svg"):
+        plt.savefig(outdir / f"panel_b.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+    if show: plt.show()
+    plt.close(fig)
+
+    # data
+    rows = []
+    N = Z_color.shape[0]
+    for i in range(N):
+        rows.append(("color", Z_color[i,0], Z_color[i,1], Z_color[i,2], float(shape_list[i]), float(color_list[i])))
+    for i in range(N):
+        rows.append(("shape", Z_shape[i,0], Z_shape[i,1], Z_shape[i,2], float(shape_list[i]), float(color_list[i])))
+    _save_csv(outdir / "panel_b_points.csv",
+              ["state","pc1","pc2","pc3","shape","color"], rows)
+    _save_json(outdir / "panel_b_axes.json", {
+        "target_pc": t_pc.tolist(),
+        "color_axis_color_pc": col_c.tolist(),
+        "color_axis_shape_pc": col_s.tolist(),
+        "shape_axis_shape_pc": shp_s.tolist(),
+        "shape_axis_color_pc": shp_c.tolist(),
+    })
+
+def plot_panel_c(S: NDArray[np.float64], g_color: NDArray[np.float64], g_shape: NDArray[np.float64],
+                 outdir: Path, *, mode: str = "ratio", logratio: bool = True, show: bool = False):
+    _ensure_dir(outdir)
+    sel = S[:,1] - S[:,0]
+    eps = 1e-12
+    if mode == "ratio":
+        y = (g_color + eps) / (g_shape + eps)
+        label = "gain ratio (color / shape)"
+        if logratio:
+            y = np.log2(y)
+            label = "log2 gain ratio (color / shape)"
+    else:
+        y = g_color - g_shape
+        label = "gain difference (color - shape)"
+
+    fig = plt.figure(figsize=(5.6, 4.6))
+    plt.axhline(0.0, color='k', lw=1.0, ls='--', alpha=0.6)
+    sc = plt.scatter(sel, y, c=sel, cmap='bwr', alpha=0.8, edgecolors='none', s=22)
+    cb = plt.colorbar(sc); cb.set_label('Color - Shape selectivity')
+    plt.xlabel('Selectivity (color - shape)')
+    plt.ylabel(label)
+    plt.grid(True, linestyle=":")
+    plt.tight_layout()
+    for ext in ("png","pdf","svg"):
+        plt.savefig(outdir / f"panel_c.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+    if show: plt.show()
+    plt.close(fig)
+
+    rows = []
+    for i in range(len(sel)):
+        ratio = float((g_color[i]+eps)/(g_shape[i]+eps))
+        l2 = float(np.log2(ratio))
+        rows.append((i, float(sel[i]), float(g_color[i]), float(g_shape[i]), ratio, l2))
+    _save_csv(outdir / "panel_c_data.csv",
+              ["neuron","selectivity","g_color","g_shape","ratio","log2_ratio"], rows)
+
+def plot_panel_d(rows: list[dict], outdir: Path, tag: str,
+                 ylabel: str = "Cross-attend angle (deg)") -> None:
+    _ensure_dir(outdir)
+    xs = [r["range"] for r in rows]
+    yc = [r["color_cross_attend_deg"] for r in rows]
+    ys = [r["shape_cross_attend_deg"] for r in rows]
+
+    fig = plt.figure(figsize=(6.2, 4.8))
+    plt.plot(xs, yc, marker="o", lw=2.0, label="Color cross-attend")
+    plt.plot(xs, ys, marker="s", lw=2.0, label="Shape cross-attend")
+
+    has_mean = ("color_cross_attend_deg_shuf_mean" in rows[0])
+    if has_mean:
+        yc_m = np.array([r["color_cross_attend_deg_shuf_mean"] for r in rows])
+        ys_m = np.array([r["shape_cross_attend_deg_shuf_mean"] for r in rows])
+        yc_se = np.array([r.get("color_cross_attend_deg_shuf_sem", 0.0) for r in rows])
+        ys_se = np.array([r.get("shape_cross_attend_deg_shuf_sem", 0.0) for r in rows])
+        plt.plot(xs, yc_m, marker="^", lw=1.6, ls="--", label="Color cross-attend (shuf mean)")
+        plt.plot(xs, ys_m, marker="v", lw=1.6, ls="--", label="Shape cross-attend (shuf mean)")
+        plt.fill_between(xs, yc_m - 1.96*yc_se, yc_m + 1.96*yc_se, alpha=0.15, linewidth=0)
+        plt.fill_between(xs, ys_m - 1.96*ys_se, ys_m + 1.96*ys_se, alpha=0.15, linewidth=0)
+
+    plt.xlabel("Constraint range")
+    plt.ylabel(ylabel)
+    plt.title(f"Cross-attend vs range — {tag}")
+    plt.grid(True, linestyle=":")
+    plt.legend()
+    plt.tight_layout()
+    for ext in ("png","pdf","svg"):
+        plt.savefig(outdir / f"panel_d.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+    plt.close(fig)
+
+    out_rows = []
+    for r in rows:
+        out_rows.append((
+            r["range"],
+            r["color_cross_attend_deg"], r["shape_cross_attend_deg"],
+            r.get("color_cross_attend_deg_shuf_mean", r.get("color_cross_attend_deg_shuf","")),
+            r.get("shape_cross_attend_deg_shuf_mean", r.get("shape_cross_attend_deg_shuf","")),
+            r.get("color_cross_attend_deg_shuf_sem", ""),
+            r.get("shape_cross_attend_deg_shuf_sem", "")
+        ))
+    _save_csv(outdir / "panel_d_data.csv",
+              ["range","color_angle","shape_angle","color_shuf_mean_or_single","shape_shuf_mean_or_single","color_shuf_sem","shape_shuf_sem"],
+              out_rows)

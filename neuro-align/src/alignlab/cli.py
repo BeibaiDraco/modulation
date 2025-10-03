@@ -20,8 +20,10 @@ from .plotting import (
     plot_original_two_panel, plot_embedding_3d,
     plot_range_vs_degree, plot_gains_vs_selectivity,
     plot_triad_three_panel, plot_gains_vs_selectivity_pair,
-    plot_triad_cross_sweep,   # NEW
+    plot_triad_cross_sweep,
+    plot_panel_b, plot_panel_c, plot_panel_d,   # <-- ADD
 )
+
 
 
 
@@ -29,7 +31,7 @@ def load_config(path: Path) -> ExperimentConfig:
     import yaml
     from .config import (
         ExperimentConfig, NetworkConfig, ObjectiveConfig, ConstraintConfig, GridConfig,
-        TargetType, AxisOfInterest, ConstraintType, WRNormalization, ShuffleConfig
+        TargetType, AxisOfInterest, ConstraintType, WRNormalization, ShuffleConfig, SweepConfig
     )
 
     def _enum(enum_cls, v, *, tolower=True):
@@ -72,15 +74,20 @@ def load_config(path: Path) -> ExperimentConfig:
     
     # --- Grid ---
     grd = GridConfig(**raw.get("grid", {}))
+    
 
     # --- Shuffle ---
     shraw = dict(raw.get("shuffle", {}))
     shuf = ShuffleConfig(**shraw)
 
+    # --- Sweep ---
+    sweraw = dict(raw.get("sweep", {}))
+    swe = SweepConfig(**sweraw)
+
     tag = raw.get("tag", "experiment")
     save_dir = raw.get("save_dir", "outputs")
     return ExperimentConfig(network=net, objective=obj, constraints=con, grid=grd,
-                            tag=tag, save_dir=save_dir, shuffle=shuf) 
+                            tag=tag, save_dir=save_dir, shuffle=shuf, sweep=swe) 
 
 def cmd_run(args):
     cfg = load_config(Path(args.config))
@@ -102,13 +109,23 @@ def cmd_run(args):
     else:
         plot_embedding_3d(Z0, Zopt, pca.components_, target, d0, dopt, outdir, cfg.tag)
 
+def _resolve_ranges(cfg, arg_ranges, preset=None):
+    if arg_ranges:  # CLI provided
+        return [float(x) for x in arg_ranges]
+    # preset handled in Option B below; for now just YAML defaults:
+    if cfg.constraints.type == ConstraintType.BALL:
+        return list(cfg.sweep.ranges_ball)
+    else:
+        return list(cfg.sweep.ranges_box)
+
+
 def cmd_sweep(args):
     cfg = load_config(Path(args.config))
     if args.use_box:
         cfg.constraints.type = ConstraintType.BOX
     if args.use_ball:
         cfg.constraints.type = ConstraintType.BALL
-    ranges = [float(x) for x in args.ranges]
+    ranges = _resolve_ranges(cfg, getattr(args, "ranges", None), getattr(args,"preset",None))
     res = sweep_range_vs_degree(cfg, ranges)
     outdir = Path(cfg.save_dir) / (cfg.tag + "_sweep")
     outdir.mkdir(parents=True, exist_ok=True)
@@ -142,9 +159,30 @@ def cmd_triad(args):
         mode=args.gcompare, logratio=args.logratio, show=args.show
     )
     
+    # --- Paper panels B & C ---
+    if getattr(args, "paper_panels", False):
+        # cross-axes under both attention states
+        d_col_c = net.color_axis(cfg.objective.shape_for_color_line, g=gcol)
+        d_col_s = net.color_axis(cfg.objective.shape_for_color_line, g=gshp)
+        d_shp_c = net.shape_axis(cfg.objective.color_for_shape_line, g=gcol)
+        d_shp_s = net.shape_axis(cfg.objective.color_for_shape_line, g=gshp)
+
+        plot_panel_b(
+            Z_color=Zc, Z_shape=Zs, pca_components=pca.components_,
+            target_vec_neuron=target,
+            color_axis_color=d_col_c, color_axis_shape=d_col_s,
+            shape_axis_color=d_shp_c, shape_axis_shape=d_shp_s,
+            shape_vals=cfg.grid.shape_vals, color_vals=cfg.grid.color_vals,
+            outdir=outdir, zlim=tuple(args.zlim) if args.zlim else None,
+            elev=args.elev, azim=args.azim, show=args.show
+        )
+        plot_panel_c(net.S, gcol, gshp, outdir, mode="ratio", logratio=True, show=False)
+    
+    
 def cmd_triad_sweep(args):
     cfg = load_config(Path(args.config))
-    ranges = [float(x) for x in args.ranges]
+    ranges = _resolve_ranges(cfg, getattr(args, "ranges", None), getattr(args,"preset",None))
+    
     # optional CLI overrides
     if args.no_shuffle:
         cfg.shuffle.enabled = False
@@ -160,6 +198,9 @@ def cmd_triad_sweep(args):
     outdir.mkdir(parents=True, exist_ok=True)
     save_json(res, outdir / f"{cfg.tag}_triad_sweep.json")
     plot_triad_cross_sweep(res["rows"], outdir, cfg.tag)
+    if getattr(args, "paper_panels", False):
+        plot_panel_d(res["rows"], outdir, cfg.tag)
+   
 
 
 
@@ -181,7 +222,7 @@ def main():
 
     ps = sub.add_parser("sweep", help="Sweep constraint range and plot Δangle")
     ps.add_argument("--config", required=True)
-    ps.add_argument("--ranges", nargs="+", required=True, help="List of range values")
+    ps.add_argument("--ranges", nargs="+", help="List of range values")
     g = ps.add_mutually_exclusive_group()
     g.add_argument("--use-box", action="store_true", dest="use_box")
     g.add_argument("--use-ball", action="store_true", dest="use_ball")
@@ -198,16 +239,19 @@ def main():
                     help="Compare gains as ratio (color/shape) or difference (color-shape)")
     pt.add_argument("--logratio", action="store_true",
                     help="Use log2 for the ratio plot (only sensible if gains are positive)")
+    pt.add_argument("--paper-panels", action="store_true",help="Also produce panel_b (3D bivariate dots + axes) and panel_c (gain vs selectivity) with data")
     pt.set_defaults(func=cmd_triad)
+
     
 
     pts = sub.add_parser("triad-sweep", help="Sweep range and plot cross-attend angles (with shuffled null)")
     pts.add_argument("--config", required=True)
-    pts.add_argument("--ranges", nargs="+", required=True, help="List of range values")
+    pts.add_argument("--ranges", nargs="+", help="List of range values")
     pts.add_argument("--no-shuffle", action="store_true", help="Disable shuffle test")
     pts.add_argument("--shuffle-bins", type=int, help="Number of selectivity bins (default: 10)")
     pts.add_argument("--shuffle-mode", choices=["independent","paired"], help="Shuffle independently or as pairs")
     pts.add_argument("--shuffle-seed", type=int, help="Seed for shuffle RNG")
+    pts.add_argument("--paper-panels", action="store_true",help="Also produce panel_d (cross-attend vs range with shuffled mean ± CI) with data")
     pts.set_defaults(func=cmd_triad_sweep)
 
 

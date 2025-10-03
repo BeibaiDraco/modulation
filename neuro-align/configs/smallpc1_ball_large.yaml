@@ -1,4 +1,4 @@
-tag: smallpc1_ball
+tag: small_pc1_ball_large
 save_dir: outputs
 
 network:
@@ -14,11 +14,11 @@ network:
 
 objective:
   target_type: custom_pc
-  theta_deg: 30.0       # target direction in PC space
-  phi_deg: 25.0
+  theta_deg: 45.0       # target direction in PC space
+  phi_deg: 60.0
   axis_of_interest: color
   shape_for_color_line: 0.3
-  color_for_shape_line: 0.3
+  color_for_shape_line: 0.6
 
 constraints:
   type: ball            # or "box"
@@ -29,12 +29,15 @@ constraints:
 
 shuffle:
   enabled: true
-  num_bins: 10          # quantile bins by default
+  num_bins: 8          # quantile bins by default
   binning: quantile     # or "equal"
   mode: independent     # or "paired"
-  seed: 1234            # optional; default = network.seed + 101
+  seed: 2025            # optional; default = network.seed + 101
 
 grid:
   shape_vals: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
   color_vals: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
+sweep:
+  ranges_ball: [0.02, 0.04, 0.06, 0.08, 0.10, 0.14, 0.18, 0.22,0.26,0.30]    # used when constraints.type: ball
+  ranges_box:  [0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20]      # used when constraints.type: box

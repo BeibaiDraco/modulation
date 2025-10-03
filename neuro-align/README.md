@@ -186,8 +186,8 @@ python -m alignlab.cli triad \
 ```
 
 - Fits PCA on **unmodulated**, then runs **two** optimizations:
-  - Color-axis aligned → gains (g_\text{color})
-  - Shape-axis aligned → gains (g_\text{shape})
+  - Color-axis aligned → gains $g_\text{color}$
+  - Shape-axis aligned → gains $g_\text{shape}$
 - Three-panel plot: Unmod | Color-aligned | Shape-aligned
 - Gains comparison: color vs shape (ratio or difference)
 - If `shuffle.enabled: true`, the triad JSON **also** includes shuffled cross-attend angles.

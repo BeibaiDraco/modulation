@@ -65,6 +65,7 @@ class ShuffleConfig:
     binning: str = "quantile"      # "quantile" or "equal"
     mode: str = "independent"      # "independent" or "paired"
     seed: Optional[int] = None     # if None, will use network.seed + 101
+    repeats: int = 1               # (N repeats for panel_d)
 
 @dataclass
 class ExperimentConfig:
@@ -76,3 +77,18 @@ class ExperimentConfig:
     tag: str = "default_smallpc1_custom"
     shuffle: ShuffleConfig = field(default_factory=ShuffleConfig)  
 
+@dataclass
+class SweepConfig:
+    ranges_ball: Sequence[float] = (0.02, 0.04, 0.06, 0.08, 0.10, 0.14, 0.18, 0.22,0.26,0.30)
+    ranges_box:  Sequence[float] = (0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20)
+
+@dataclass
+class ExperimentConfig:
+    network: NetworkConfig = field(default_factory=NetworkConfig)
+    objective: ObjectiveConfig = field(default_factory=ObjectiveConfig)
+    constraints: ConstraintConfig = field(default_factory=ConstraintConfig)
+    grid: GridConfig = field(default_factory=GridConfig)
+    save_dir: str = "outputs"
+    tag: str = "default_smallpc1_custom"
+    shuffle: ShuffleConfig = field(default_factory=ShuffleConfig)
+    sweep: SweepConfig = field(default_factory=SweepConfig)   # <-- NEW

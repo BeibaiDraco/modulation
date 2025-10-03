@@ -185,6 +185,8 @@ def _optimize_axis_with_shared_pca(net, pca, target, cfg, axis_choice: AxisOfInt
     Optimize gains for one axis (COLOR or SHAPE) using the PCA basis fitted on UNMOD.
     Returns a dict with metrics, and arrays for plotting.
     """
+    import numpy as np
+    from scipy.optimize import minimize
 
     N = cfg.network.N
     g0 = np.ones(N)
@@ -366,6 +368,7 @@ def optimize_triad(cfg):
 
 
     # summarized comparison of gains (safe if positive_gains=True; otherwise ratio may be negative)
+
     eps = 1e-12
     gain_ratio = (g_color + eps) / (g_shape + eps)
     gain_diff  = g_color - g_shape
@@ -406,6 +409,7 @@ def optimize_triad(cfg):
         "cross_attend": {
         "color_axis_angle_deg": float(color_cross_attend_deg),
         "shape_axis_angle_deg": float(shape_cross_attend_deg),
+        "shuffle": shuffle_summary,
         "color_axis_norms": {
             "under_color_attend": float(np.linalg.norm(color_axis_color_g)),
             "under_shape_attend": float(np.linalg.norm(color_axis_shape_g)),
@@ -414,8 +418,8 @@ def optimize_triad(cfg):
             "under_color_attend": float(np.linalg.norm(shape_axis_color_g)),
             "under_shape_attend": float(np.linalg.norm(shape_axis_shape_g)),
         },
-        },
-         "shuffle": shuffle_summary,
+    },
+
     }
 
     
@@ -458,12 +462,12 @@ def save_json(obj: dict, path: Path) -> None:
         json.dump(obj, f, indent=2)
 
 def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
-    """
-    Sweep constraint magnitude and record cross-attend angles:
-      - color_cross_attend_deg: angle between color axis under (color gains) vs (shape gains)
-      - shape_cross_attend_deg: angle between shape axis under (color gains) vs (shape gains)
-      - *_shuf (if present): same angles after bin-based gain shuffling
-    """
+    
+    #Sweep constraint magnitude and record cross-attend angles:
+    #  - color_cross_attend_deg: angle between color axis under (color gains) vs (shape gains)
+    #  - shape_cross_attend_deg: angle between shape axis under (color gains) vs (shape gains)
+    #  - *_shuf (if present): same angles after bin-based gain shuffling
+    
     rows = []
     for r in ranges:
         local = cfg  # shallow copy ok
@@ -488,6 +492,41 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
         if shuf and shuf.get("cross_attend"):
             row["color_cross_attend_deg_shuf"] = shuf["cross_attend"]["color_axis_angle_deg"]
             row["shape_cross_attend_deg_shuf"] = shuf["cross_attend"]["shape_axis_angle_deg"]
+                # --- NEW: repeated shuffles for mean ± CI (panel_d) ---
+        if cfg.shuffle.enabled and int(cfg.shuffle.repeats) > 1:
+            repeats   = int(cfg.shuffle.repeats)
+            base_seed = cfg.shuffle.seed if cfg.shuffle.seed is not None else (cfg.network.seed + 101)
+
+            sel  = net.S[:, 1] - net.S[:, 0]
+            bins = assign_bins(sel, cfg.shuffle.num_bins, cfg.shuffle.binning)
+
+            col_angles = []
+            shp_angles = []
+            for i in range(repeats):
+                rng = np.random.default_rng(base_seed + 10007 * i)
+                if cfg.shuffle.mode == "paired":
+                    g_color_shuf, g_shape_shuf = shuffle_pair_within_bins(gcol, gshp, bins, rng)
+                else:
+                    g_color_shuf = shuffle_within_bins(gcol, bins, rng)
+                    g_shape_shuf = shuffle_within_bins(gshp, bins, rng)
+
+                col_axis_color_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_color_shuf)
+                col_axis_shape_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape_shuf)
+                shp_axis_color_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color_shuf)
+                shp_axis_shape_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape_shuf)
+
+                col_angles.append(angle_deg(col_axis_color_g_shuf, col_axis_shape_g_shuf))
+                shp_angles.append(angle_deg(shp_axis_color_g_shuf, shp_axis_shape_g_shuf))
+
+            col_mean = float(np.mean(col_angles))
+            shp_mean = float(np.mean(shp_angles))
+            col_sem  = float(np.std(col_angles, ddof=1) / np.sqrt(repeats))
+            shp_sem  = float(np.std(shp_angles, ddof=1) / np.sqrt(repeats))
+
+            row["color_cross_attend_deg_shuf_mean"] = col_mean
+            row["shape_cross_attend_deg_shuf_mean"] = shp_mean
+            row["color_cross_attend_deg_shuf_sem"]  = col_sem
+            row["shape_cross_attend_deg_shuf_sem"]  = shp_sem
 
         rows.append(row)
 
