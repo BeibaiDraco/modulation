@@ -146,10 +146,16 @@ class LinearRNN:
         return r1 - r0
 
 def angle_deg(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
+    """
+    Un-directional angle between two axes in neuron space.
+    Returns a value in [0, 90] degrees: min(theta, 180 - theta).
+    """
     a = np.asarray(a); b = np.asarray(b)
     na = np.linalg.norm(a); nb = np.linalg.norm(b)
     if na < 1e-12 or nb < 1e-12:
         return 0.0
     cosv = float(np.dot(a, b) / (na * nb))
     cosv = np.clip(cosv, -1.0, 1.0)
-    return float(np.degrees(np.arccos(cosv)))
+    theta = float(np.degrees(np.arccos(cosv)))
+    return float(min(theta, 180.0 - theta))
+

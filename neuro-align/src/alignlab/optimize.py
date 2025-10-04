@@ -222,14 +222,9 @@ def _optimize_axis_with_shared_pca(net, pca, target, cfg, axis_choice: AxisOfInt
     Z_opt = pca.transform(X_opt)
 
     # angles/norms
-    def ang(a, b):
-        na = float(np.linalg.norm(a)); nb = float(np.linalg.norm(b))
-        if na < 1e-15 or nb < 1e-15: return 0.0
-        c = float(np.dot(a, b) / (na * nb))
-        return float(np.degrees(np.arccos(np.clip(c, -1.0, 1.0))))
-    angle_pre  = ang(d0, target)
-    angle_post = ang(d_opt, target)
-    improvement = angle_pre - angle_post
+    angle_pre  = angle_deg(d0,   target)
+    angle_post = angle_deg(d_opt, target)
+    improvement = angle_pre - angle_post  
     norm_pre  = float(np.linalg.norm(d0))
     norm_post = float(np.linalg.norm(d_opt))
     eq_residual = float(norm_post**2 - norm_pre**2) if cfg.constraints.hard_norm else None
@@ -278,7 +273,7 @@ def _optimize_axis_with_shared_pca(net, pca, target, cfg, axis_choice: AxisOfInt
         "angles_deg": {
             "unmod_to_target": float(angle_pre),
             "opt_to_target": float(angle_post),
-            "delta_opt_vs_unmod": float(ang(d0, d_opt)),
+            "delta_opt_vs_unmod": float(angle_deg(d0, d_opt)),
             "improvement": float(improvement),
         },
         "axis_norms": {
@@ -317,6 +312,25 @@ def optimize_triad(cfg):
     shape_axis_color_g = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color)  # shape axis under color gains
     shape_axis_shape_g = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape)  # shape axis under shape gains
 
+    # angles to target (un-directional)
+    a_cc = angle_deg(color_axis_color_g, target)
+    a_cs = angle_deg(color_axis_shape_g, target)
+    a_ss = angle_deg(shape_axis_shape_g, target)
+    a_sc = angle_deg(shape_axis_color_g, target)
+
+    to_target = {
+        "color_axis": {
+            "under_color_deg": float(a_cc),
+            "under_shape_deg": float(a_cs),
+            "improvement_deg": float(a_cs - a_cc)
+        },
+        "shape_axis": {
+            "under_shape_deg": float(a_ss),
+            "under_color_deg": float(a_sc),
+            "improvement_deg": float(a_sc - a_ss)
+        }
+    }
+
     # cross-attend angles
     color_cross_attend_deg = angle_deg(color_axis_color_g, color_axis_shape_g)
     shape_cross_attend_deg = angle_deg(shape_axis_color_g, shape_axis_shape_g)
@@ -340,6 +354,10 @@ def optimize_triad(cfg):
         col_axis_shape_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape_shuf)
         shp_axis_color_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color_shuf)
         shp_axis_shape_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape_shuf)
+        a_cc_sh = angle_deg(col_axis_color_g_shuf, target)
+        a_cs_sh = angle_deg(col_axis_shape_g_shuf, target)
+        a_ss_sh = angle_deg(shp_axis_shape_g_shuf, target)
+        a_sc_sh = angle_deg(shp_axis_color_g_shuf, target)
 
         color_cross_attend_deg_shuf = angle_deg(col_axis_color_g_shuf, col_axis_shape_g_shuf)
         shape_cross_attend_deg_shuf = angle_deg(shp_axis_color_g_shuf, shp_axis_shape_g_shuf)
@@ -362,7 +380,20 @@ def optimize_triad(cfg):
                     "under_color_attend_shuf": float(np.linalg.norm(shp_axis_color_g_shuf)),
                     "under_shape_attend_shuf": float(np.linalg.norm(shp_axis_shape_g_shuf)),
                 }
+            },
+            "to_target": {
+                "color_axis": {
+                    "under_color_deg": float(a_cc_sh),
+                    "under_shape_deg": float(a_cs_sh),
+                    "improvement_deg": float(a_cs_sh - a_cc_sh)
+                },
+                "shape_axis": {
+                    "under_shape_deg": float(a_ss_sh),
+                    "under_color_deg": float(a_sc_sh),
+                    "improvement_deg": float(a_sc_sh - a_ss_sh)
+                }
             }
+                        
         }
 
 
@@ -385,6 +416,7 @@ def optimize_triad(cfg):
         "pca": {
             "explained_variance_ratio": [float(x) for x in pca.explained_variance_ratio_.tolist()],
         },
+        "to_target": to_target,
         "unmod": {
             "color_axis_norm": float(np.linalg.norm(d_color0)),
             "shape_axis_norm": float(np.linalg.norm(d_shape0)),
@@ -462,37 +494,80 @@ def save_json(obj: dict, path: Path) -> None:
         json.dump(obj, f, indent=2)
 
 def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
-    
-    #Sweep constraint magnitude and record cross-attend angles:
-    #  - color_cross_attend_deg: angle between color axis under (color gains) vs (shape gains)
-    #  - shape_cross_attend_deg: angle between shape axis under (color gains) vs (shape gains)
-    #  - *_shuf (if present): same angles after bin-based gain shuffling
-    
+    """
+    Sweep constraint magnitude and record:
+      - cross-attend angles (undirectional): angle between the same axis under color vs shape gains
+      - improvement-to-target (undirectional): for each axis, how much 'own' attention helps vs 'other'
+        * impr_color_deg = angle(d_color(g_shape), target) - angle(d_color(g_color), target)
+        * impr_shape_deg = angle(d_shape(g_color), target) - angle(d_shape(g_shape), target)
+      - If shuffle.enabled and repeats>1: mean ± SEM for both cross-attend and improvement metrics
+    """
+    def undir_angle(a, b):
+        # min(theta, 180 - theta) to treat axes as unoriented
+        th = angle_deg(a, b)
+        return th if th <= 90.0 else 180.0 - th
+
     rows = []
     for r in ranges:
-        local = cfg  # shallow copy ok
+        # (1) set constraint magnitude on a local copy (shallow is OK for these scalars)
+        local = cfg
         if cfg.constraints.type == ConstraintType.BALL:
             local.constraints.radius = r
         else:
             local.constraints.box_half_width = r
 
+        # (2) run triad once to get gains and target etc.
         (summary, net, pca, Z0, Zc, Zs,
          dcol0, dcol1, dshp0, dshp1, target, gcol, gshp) = optimize_triad(local)
 
+        # (3) build axes under each attention state
+        col_axis_color = net.color_axis(cfg.objective.shape_for_color_line, g=gcol)  # color gains
+        col_axis_shape = net.color_axis(cfg.objective.shape_for_color_line, g=gshp)  # shape gains
+        shp_axis_shape = net.shape_axis(cfg.objective.color_for_shape_line, g=gshp)  # shape gains
+        shp_axis_color = net.shape_axis(cfg.objective.color_for_shape_line, g=gcol)  # color gains
+
+        # (4) undirectional angles to target
+        a_cc = undir_angle(col_axis_color, target)  # color axis under color
+        a_cs = undir_angle(col_axis_shape, target)  # color axis under shape
+        a_ss = undir_angle(shp_axis_shape, target)  # shape axis under shape
+        a_sc = undir_angle(shp_axis_color, target)  # shape axis under color
+
+        # improvements (positive means "own" attention helps that axis align to target)
+        impr_color = float(a_cs - a_cc)  # color axis: (shape) - (color)
+        impr_shape = float(a_sc - a_ss)  # shape axis: (color) - (shape)
+
+        # (5) undirectional cross-attend angles (same axis under the two gain states)
+        color_cross = undir_angle(col_axis_color, col_axis_shape)
+        shape_cross = undir_angle(shp_axis_color, shp_axis_shape)
+
         row = {
             "range": r,
-            "color_cross_attend_deg": summary["cross_attend"]["color_axis_angle_deg"],
-            "shape_cross_attend_deg": summary["cross_attend"]["shape_axis_angle_deg"],
+            # new improvement-to-target metrics
+            "impr_color_deg": impr_color,
+            "impr_shape_deg": impr_shape,
+            # keep cross-attend for reference (now undirectional)
+            "color_cross_attend_deg": float(color_cross),
+            "shape_cross_attend_deg": float(shape_cross),
             "success_color": summary["color_alignment"]["success"],
             "success_shape": summary["shape_alignment"]["success"],
         }
 
-        # <- NEW: include shuffled angles when optimize_triad produced them
-        shuf = summary.get("shuffle")
-        if shuf and shuf.get("cross_attend"):
-            row["color_cross_attend_deg_shuf"] = shuf["cross_attend"]["color_axis_angle_deg"]
-            row["shape_cross_attend_deg_shuf"] = shuf["cross_attend"]["shape_axis_angle_deg"]
-                # --- NEW: repeated shuffles for mean ± CI (panel_d) ---
+        # (6) include single-run shuffled stats if optimize_triad produced them
+        shuf = summary.get("shuffle") or summary.get("cross_attend", {}).get("shuffle")
+        if shuf:
+            if shuf.get("cross_attend"):
+                row["color_cross_attend_deg_shuf"] = shuf["cross_attend"]["color_axis_angle_deg"]
+                row["shape_cross_attend_deg_shuf"] = shuf["cross_attend"]["shape_axis_angle_deg"]
+            # improvement-to-target from single-run shuffle, if present
+            if shuf.get("to_target"):
+                cax = shuf["to_target"].get("color_axis", {})
+                sax = shuf["to_target"].get("shape_axis", {})
+                if "improvement_deg" in cax:
+                    row["impr_color_deg_shuf"] = float(cax["improvement_deg"])
+                if "improvement_deg" in sax:
+                    row["impr_shape_deg_shuf"] = float(sax["improvement_deg"])
+
+        # (7) repeated shuffles for mean ± SEM (panel_d)
         if cfg.shuffle.enabled and int(cfg.shuffle.repeats) > 1:
             repeats   = int(cfg.shuffle.repeats)
             base_seed = cfg.shuffle.seed if cfg.shuffle.seed is not None else (cfg.network.seed + 101)
@@ -500,8 +575,9 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
             sel  = net.S[:, 1] - net.S[:, 0]
             bins = assign_bins(sel, cfg.shuffle.num_bins, cfg.shuffle.binning)
 
-            col_angles = []
-            shp_angles = []
+            col_cross_list, shp_cross_list = [], []
+            impr_color_list, impr_shape_list = [], []
+
             for i in range(repeats):
                 rng = np.random.default_rng(base_seed + 10007 * i)
                 if cfg.shuffle.mode == "paired":
@@ -510,23 +586,44 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
                     g_color_shuf = shuffle_within_bins(gcol, bins, rng)
                     g_shape_shuf = shuffle_within_bins(gshp, bins, rng)
 
-                col_axis_color_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_color_shuf)
-                col_axis_shape_g_shuf = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape_shuf)
-                shp_axis_color_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color_shuf)
-                shp_axis_shape_g_shuf = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape_shuf)
+                # axes under shuffled gains
+                col_axis_color_sh = net.color_axis(cfg.objective.shape_for_color_line, g=g_color_shuf)
+                col_axis_shape_sh = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape_shuf)
+                shp_axis_color_sh = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color_shuf)
+                shp_axis_shape_sh = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape_shuf)
 
-                col_angles.append(angle_deg(col_axis_color_g_shuf, col_axis_shape_g_shuf))
-                shp_angles.append(angle_deg(shp_axis_color_g_shuf, shp_axis_shape_g_shuf))
+                # cross-attend (undirectional)
+                col_cross_list.append(undir_angle(col_axis_color_sh, col_axis_shape_sh))
+                shp_cross_list.append(undir_angle(shp_axis_color_sh, shp_axis_shape_sh))
 
-            col_mean = float(np.mean(col_angles))
-            shp_mean = float(np.mean(shp_angles))
-            col_sem  = float(np.std(col_angles, ddof=1) / np.sqrt(repeats))
-            shp_sem  = float(np.std(shp_angles, ddof=1) / np.sqrt(repeats))
+                # improvements to target (undirectional)
+                a_cc_sh = undir_angle(col_axis_color_sh, target)
+                a_cs_sh = undir_angle(col_axis_shape_sh, target)
+                a_ss_sh = undir_angle(shp_axis_shape_sh, target)
+                a_sc_sh = undir_angle(shp_axis_color_sh, target)
+                impr_color_list.append(a_cs_sh - a_cc_sh)
+                impr_shape_list.append(a_sc_sh - a_ss_sh)
+
+            # means & SEM
+            col_mean = float(np.mean(col_cross_list))
+            shp_mean = float(np.mean(shp_cross_list))
+            col_sem  = float(np.std(col_cross_list, ddof=1) / np.sqrt(repeats)) if repeats > 1 else 0.0
+            shp_sem  = float(np.std(shp_cross_list, ddof=1) / np.sqrt(repeats)) if repeats > 1 else 0.0
 
             row["color_cross_attend_deg_shuf_mean"] = col_mean
             row["shape_cross_attend_deg_shuf_mean"] = shp_mean
             row["color_cross_attend_deg_shuf_sem"]  = col_sem
             row["shape_cross_attend_deg_shuf_sem"]  = shp_sem
+
+            impr_c_mean = float(np.mean(impr_color_list))
+            impr_s_mean = float(np.mean(impr_shape_list))
+            impr_c_sem  = float(np.std(impr_color_list, ddof=1) / np.sqrt(repeats)) if repeats > 1 else 0.0
+            impr_s_sem  = float(np.std(impr_shape_list, ddof=1) / np.sqrt(repeats)) if repeats > 1 else 0.0
+
+            row["impr_color_deg_shuf_mean"] = impr_c_mean
+            row["impr_shape_deg_shuf_mean"] = impr_s_mean
+            row["impr_color_deg_shuf_sem"]  = impr_c_sem
+            row["impr_shape_deg_shuf_sem"]  = impr_s_sem
 
         rows.append(row)
 
@@ -536,13 +633,14 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
         "ranges": ranges,
         "rows": rows,
         "tag": cfg.tag,
-        # echo sweep-level shuffle settings so you can see how rows were produced
         "shuffle": {
             "enabled": bool(cfg.shuffle.enabled),
             "num_bins": int(cfg.shuffle.num_bins),
             "binning": cfg.shuffle.binning,
             "mode": cfg.shuffle.mode,
             "seed": cfg.shuffle.seed,
+            "repeats": int(getattr(cfg.shuffle, "repeats", 1)),
         },
+        "metric": "improvement_to_target",  # explicit: this sweep uses Δ to-target
     }
 

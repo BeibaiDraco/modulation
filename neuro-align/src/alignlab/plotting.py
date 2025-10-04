@@ -489,30 +489,31 @@ def plot_panel_c(S: NDArray[np.float64], g_color: NDArray[np.float64], g_shape: 
               ["neuron","selectivity","g_color","g_shape","ratio","log2_ratio"], rows)
 
 def plot_panel_d(rows: list[dict], outdir: Path, tag: str,
-                 ylabel: str = "Cross-attend angle (deg)") -> None:
+                 ylabel: str = "Δ angle-to-target (deg)") -> None:
     _ensure_dir(outdir)
     xs = [r["range"] for r in rows]
-    yc = [r["color_cross_attend_deg"] for r in rows]
-    ys = [r["shape_cross_attend_deg"] for r in rows]
+    yc = [r["impr_color_deg"] for r in rows]  # color-axis improvement
+    ys = [r["impr_shape_deg"] for r in rows]  # shape-axis improvement
 
     fig = plt.figure(figsize=(6.2, 4.8))
-    plt.plot(xs, yc, marker="o", lw=2.0, label="Color cross-attend")
-    plt.plot(xs, ys, marker="s", lw=2.0, label="Shape cross-attend")
+    plt.plot(xs, yc, marker="o", lw=2.0, label="Color-axis: (shape) - (color)")
+    plt.plot(xs, ys, marker="s", lw=2.0, label="Shape-axis: (color) - (shape)")
 
-    has_mean = ("color_cross_attend_deg_shuf_mean" in rows[0])
+    has_mean = ("impr_color_deg_shuf_mean" in rows[0])
     if has_mean:
-        yc_m = np.array([r["color_cross_attend_deg_shuf_mean"] for r in rows])
-        ys_m = np.array([r["shape_cross_attend_deg_shuf_mean"] for r in rows])
-        yc_se = np.array([r.get("color_cross_attend_deg_shuf_sem", 0.0) for r in rows])
-        ys_se = np.array([r.get("shape_cross_attend_deg_shuf_sem", 0.0) for r in rows])
-        plt.plot(xs, yc_m, marker="^", lw=1.6, ls="--", label="Color cross-attend (shuf mean)")
-        plt.plot(xs, ys_m, marker="v", lw=1.6, ls="--", label="Shape cross-attend (shuf mean)")
+        yc_m  = np.array([r["impr_color_deg_shuf_mean"] for r in rows])
+        ys_m  = np.array([r["impr_shape_deg_shuf_mean"] for r in rows])
+        yc_se = np.array([r.get("impr_color_deg_shuf_sem", 0.0) for r in rows])
+        ys_se = np.array([r.get("impr_shape_deg_shuf_sem", 0.0) for r in rows])
+        plt.plot(xs, yc_m, marker="^", lw=1.6, ls="--", label="Color-axis (shuf mean)")
+        plt.plot(xs, ys_m, marker="v", lw=1.6, ls="--", label="Shape-axis (shuf mean)")
         plt.fill_between(xs, yc_m - 1.96*yc_se, yc_m + 1.96*yc_se, alpha=0.15, linewidth=0)
         plt.fill_between(xs, ys_m - 1.96*ys_se, ys_m + 1.96*ys_se, alpha=0.15, linewidth=0)
 
+    plt.axhline(0.0, color='k', lw=1.0, ls='--', alpha=0.5)
     plt.xlabel("Constraint range")
     plt.ylabel(ylabel)
-    plt.title(f"Cross-attend vs range — {tag}")
+    plt.title(f"Δ to-target under own vs other attention — {tag}")
     plt.grid(True, linestyle=":")
     plt.legend()
     plt.tight_layout()
@@ -520,16 +521,19 @@ def plot_panel_d(rows: list[dict], outdir: Path, tag: str,
         plt.savefig(outdir / f"panel_d.{ext}", dpi=300, bbox_inches="tight", transparent=True)
     plt.close(fig)
 
+    # Save data
     out_rows = []
     for r in rows:
         out_rows.append((
             r["range"],
-            r["color_cross_attend_deg"], r["shape_cross_attend_deg"],
-            r.get("color_cross_attend_deg_shuf_mean", r.get("color_cross_attend_deg_shuf","")),
-            r.get("shape_cross_attend_deg_shuf_mean", r.get("shape_cross_attend_deg_shuf","")),
-            r.get("color_cross_attend_deg_shuf_sem", ""),
-            r.get("shape_cross_attend_deg_shuf_sem", "")
+            r["impr_color_deg"], r["impr_shape_deg"],
+            r.get("impr_color_deg_shuf_mean", r.get("impr_color_deg_shuf","")),
+            r.get("impr_shape_deg_shuf_mean", r.get("impr_shape_deg_shuf","")),
+            r.get("impr_color_deg_shuf_sem", ""),
+            r.get("impr_shape_deg_shuf_sem", "")
         ))
     _save_csv(outdir / "panel_d_data.csv",
-              ["range","color_angle","shape_angle","color_shuf_mean_or_single","shape_shuf_mean_or_single","color_shuf_sem","shape_shuf_sem"],
+              ["range","impr_color_deg","impr_shape_deg",
+               "impr_color_shuf_mean_or_single","impr_shape_shuf_mean_or_single",
+               "impr_color_shuf_sem","impr_shape_shuf_sem"],
               out_rows)
