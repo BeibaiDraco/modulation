@@ -12,16 +12,18 @@ from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_
 from .plotting import (
     plot_original_two_panel, plot_embedding_3d,
     plot_range_vs_degree, plot_gains_vs_selectivity,  # existing
-    plot_triad_three_panel, plot_gains_vs_selectivity_pair  # NEW
+    plot_triad_three_panel
 )
 
 from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_triad, triad_sweep
 from .plotting import (
     plot_original_two_panel, plot_embedding_3d,
     plot_range_vs_degree, plot_gains_vs_selectivity,
-    plot_triad_three_panel, plot_gains_vs_selectivity_pair,
+    plot_triad_three_panel,
     plot_triad_cross_sweep,
-    plot_panel_b, plot_panel_c, plot_panel_d,   # <-- ADD
+    plot_panel_b_color_state, plot_panel_b_shape_state,
+    plot_panel_c_activity, plot_panel_c_gopt,
+    plot_panel_d_full, plot_panel_d_shape_only,
 )
 
 
@@ -153,12 +155,6 @@ def cmd_triad(args):
         elev=args.elev, azim=args.azim, show=args.show
     )
 
-    # gains comparison plot
-    plot_gains_vs_selectivity_pair(
-        net.S, gcol, gshp, outdir, cfg.tag,
-        mode=args.gcompare, logratio=args.logratio, show=args.show
-    )
-    
     # --- Paper panels B & C ---
     if getattr(args, "paper_panels", False):
         # cross-axes under both attention states
@@ -167,16 +163,27 @@ def cmd_triad(args):
         d_shp_c = net.shape_axis(cfg.objective.color_for_shape_line, g=gcol)
         d_shp_s = net.shape_axis(cfg.objective.color_for_shape_line, g=gshp)
 
-        plot_panel_b(
+        zlim = tuple(args.zlim) if args.zlim else None
+        plot_panel_b_color_state(
             Z_color=Zc, Z_shape=Zs, pca_components=pca.components_,
             target_vec_neuron=target,
             color_axis_color=d_col_c, color_axis_shape=d_col_s,
             shape_axis_color=d_shp_c, shape_axis_shape=d_shp_s,
             shape_vals=cfg.grid.shape_vals, color_vals=cfg.grid.color_vals,
-            outdir=outdir, zlim=tuple(args.zlim) if args.zlim else None,
+            outdir=outdir, tag=cfg.tag, zlim=zlim,
+            elev=args.elev, azim=args.azim, show=args.show, save_data=True
+        )
+        plot_panel_b_shape_state(
+            Z_color=Zc, Z_shape=Zs, pca_components=pca.components_,
+            target_vec_neuron=target,
+            color_axis_color=d_col_c, color_axis_shape=d_col_s,
+            shape_axis_color=d_shp_c, shape_axis_shape=d_shp_s,
+            shape_vals=cfg.grid.shape_vals, color_vals=cfg.grid.color_vals,
+            outdir=outdir, tag=cfg.tag, zlim=zlim,
             elev=args.elev, azim=args.azim, show=args.show
         )
-        plot_panel_c(net.S, gcol, gshp, outdir, mode="ratio", logratio=True, show=False)
+        plot_panel_c_activity(net, cfg, gcol, gshp, outdir, cfg.tag, show=False)
+        plot_panel_c_gopt(net.S, gcol, gshp, outdir, cfg.tag, show=False)
     
     
 def cmd_triad_sweep(args):
@@ -199,7 +206,9 @@ def cmd_triad_sweep(args):
     save_json(res, outdir / f"{cfg.tag}_triad_sweep.json")
     plot_triad_cross_sweep(res["rows"], outdir, cfg.tag)
     if getattr(args, "paper_panels", False):
-        plot_panel_d(res["rows"], outdir, cfg.tag)
+        plot_panel_d_full(res["rows"], outdir, cfg.tag)
+        # Color-axis only variant (panel_d.*)
+        plot_panel_d_shape_only(res["rows"], outdir, cfg.tag)
    
 
 

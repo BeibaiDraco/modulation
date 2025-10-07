@@ -10,75 +10,174 @@ Requires-Dist: scikit-learn>=1.3
 Requires-Dist: matplotlib>=3.7
 Requires-Dist: PyYAML>=6.0
 
+# neuro‑align — Alignment experiments for population codes
 
+**neuro‑align** is a small, reproducible framework for studying how multiplicative **gain modulation** aligns population **feature axes** (e.g., color/shape) to a **target direction** in a low‑dimensional embedding (top 3 PCs from the unmodulated responses).
 
-# alignlab — Alignment Experiments for Population Codes
+The package provides:
 
-**alignlab** is a small, reproducible framework for running alignment experiments on a linear recurrent population model. It supports:
+* **Single‑axis alignment** (align an axis of interest to a target)
+* **Triad analysis**: *Unmodulated* | *Color‑attended* | *Shape‑attended*
+* **Improvement‑to‑target metric** (undirectional angles, in [0°, 90°])
+* **Shuffle tests** (bin‑wise shuffling of gains by selectivity, with mean ± 95% CI)
+* Publication‑quality **figures** + **per‑figure CSV/JSON** for full reproducibility
 
-- **Single-axis alignment** (align Color/Shape axis to a target direction)
-- **Triad analysis** (Unmodulated | Color-aligned | Shape-aligned)
-- **Cross-attend metrics** (compare the *same* feature axis under two attention states)
-- **Bin-based shuffle tests** (nulls that destroy gain–selectivity mapping within selectivity bins)
-- **Sweeps** over constraint strength with publication-quality plots
+> **Angles are orientation‑invariant everywhere**: axes are treated as *undirected* (angle θ is reported as min(θ, 180°−θ)).
 
-All projections use a **single PCA basis** fitted on the **unmodulated** grid to avoid basis-mismatch artifacts.
+---
 
-------
+## 1) Installation
 
-## 0) Requirements
+**Requirements**
 
-- Python 3.9+ (tested with 3.10/3.11/3.12)
-- Packages (installed automatically via editable install):
-  - `numpy`, `scipy`, `scikit-learn`, `matplotlib`, `PyYAML`
+* Python ≥ 3.9 (tested with 3.10–3.12)
+* `numpy`, `scipy`, `scikit-learn`, `matplotlib`, `PyYAML`
 
-> For interactive 3D rotation you need a GUI backend:
->
-> - macOS: `export MPLBACKEND=MacOSX`
-> - Cross-platform: install PyQt (`conda install pyqt`) then `export MPLBACKEND=QtAgg`
-> - Or Tk: `conda install tk` then `export MPLBACKEND=TkAgg`
-
-------
-
-## 1) Install
+**Install (editable):**
 
 ```bash
-# from the repo root
 pip install -e .
 ```
 
-This makes the `alignlab` package importable and enables the `python -m alignlab.cli ...` commands.
+This installs the `alignlab` package and enables commands like `python -m alignlab.cli ...`.
 
-------
+---
 
-## 2) Project Layout
+## 2) Repository layout
 
 ```
 neuro-align/
-├─ configs/                 # experiment configurations (YAML)
-├─ outputs/                 # results (created automatically)
+├─ configs/                    # YAML configs (e.g., paper.yaml)
+├─ outputs/                    # results (created automatically)
+├─ reproduce_panels_from_csv.py# standalone reproducer (no model code needed)
 ├─ src/alignlab/
-│  ├─ __init__.py
-│  ├─ cli.py               # command-line interface
-│  ├─ config.py            # dataclasses & enums
-│  ├─ constraints.py       # SLSQP bounds/constraints builders
-│  ├─ network.py           # LinearRNN, responses, PCA, axes
-│  ├─ objectives.py        # target vectors & axis helpers
-│  ├─ optimize.py          # optimizers, triad & sweep logic
-│  ├─ plotting.py          # 3D plots, sweep plots
-│  └─ shuffle.py           # binning & within-bin shuffle
-└─ pyproject.toml / README.md
+│  ├─ cli.py                   # command-line interface
+│  ├─ config.py                # dataclasses & enums (network, objective, constraints, grid, shuffle)
+│  ├─ constraints.py           # SLSQP bounds/constraints builders
+│  ├─ network.py               # LinearRNN, responses, PCA, angle utilities
+│  ├─ objectives.py            # target vectors & axis-of-interest helpers
+│  ├─ optimize.py              # single-run, triad, and sweeps (incl. shuffle means/CI)
+│  └─ plotting.py              # paper figures + data saving
+└─ README.md
 ```
 
-------
+---
 
-## 3) Configuration (YAML)
+## 3) Quickstart (paper replication)
 
-Create a config in `configs/`. Example:
+We provide a ready‑to‑run paper config: **`configs/paper.yaml`**. It defines the network, target, constraints, grid, shuffle, and default sweep ranges. 
+
+> **No `--zlim` needed by default**. You can still pass `--elev/--azim` if you want a specific view.
+
+### A) Triad (produces the 3‑panel figure + **panel_b** and **panel_c**)
+
+```bash
+python -m alignlab.cli triad \
+  --config configs/paper.yaml \
+  --paper-panels \
+  --elev 25 --azim 135 \
+  --show
+```
+
+**Outputs** (in `outputs/<tag>/`):
+
+* `*_triad_threepanel.(png|pdf)` — Unmod | Color‑attend | Shape‑attend (3D)
+* `panel_b_color.(png|pdf|svg)` — color-attend cloud (bold) + axes under color gains
+* `panel_b_shape.(png|pdf|svg)` — shape-attend cloud (bold) + axes under shape gains
+* `panel_c.(png|pdf|svg)` — activity-derived gain ratio (color ÷ shape)
+* `panel_c_gopt.(png|pdf|svg)` — optimized gain ratio (color ÷ shape)
+* `panel_b_points.csv`, `panel_b_axes.json`
+* `panel_c_activity_data.csv`, `panel_c_gopt_data.csv`
+* `*_triad_summary.json` (angles, norms, gains, constraints, shuffle details, etc.)
+*Default view for panel B figures is elev=30°, azim=166° (the same look you get from `--elev 30 --azim 166`).*
+
+### B) Triad‑sweep (produces **panel_d**)
+
+```bash
+python -m alignlab.cli triad-sweep \
+  --config configs/paper.yaml \
+  --paper-panels
+```
+
+**Outputs** (in `outputs/<tag>_triad_sweep/`):
+
+* `panel_d_full.(png|pdf|svg)` — color + shape improvements vs range (with shuffled 95% CI if available)
+* `panel_d.(png|pdf|svg)` — color-axis improvement vs range (with shuffled 95% CI if available)
+* `panel_d_data.csv` — source data
+* `*_triad_sweep.json` — rows for each range (includes improvements and shuffle stats)
+
+---
+
+## 4) What the figures show
+
+### Panel B — Embedding & axes (3D, unmodulated PCA basis)
+
+* **Dots** (two clouds): responses projected into the SAME PCA basis fitted on **unmodulated** responses.
+
+  * ○ **Color‑attended** grid
+  * △ **Shape‑attended** grid
+    Dot color is **bivariate**:
+  * **Hue** encodes *color* stimulus (0→1 wraps hue)
+  * **Lightness** encodes *shape* stimulus (darker→lighter as shape increases)
+* **Lines from origin**:
+
+  * Target (crimson)
+  * Color axis under color gains (darkorange, solid)
+  * Color axis under shape gains (darkorange, dashed)
+  * Shape axis under shape gains (seagreen, solid)
+  * Shape axis under color gains (seagreen, dashed)
+
+### Panel C — Gains vs selectivity
+
+* **Activity-derived**: gain ratio from responses = |Δr_color| / |Δr_shape|
+* **Optimized g**: gain ratio from parameters = g_color / g_shape
+* **x**: neuron selectivity = (*shape − color*)
+* **y**: gain ratio (color / shape), unity line at 1.0 for reference
+
+### Panel D — Improvement‑to‑target vs constraint range
+
+For each axis (color, shape), we compare alignment to the target under its **own** attention vs the **other** attention:
+
+* Color‑axis improvement
+  [
+  \Delta_\text{color} =
+  \angle(d_\text{color}(g_\text{shape}),\ t) - \angle(d_\text{color}(g_\text{color}),\ t)
+  ]
+* Shape‑axis improvement
+  [
+  \Delta_\text{shape} =
+  \angle(d_\text{shape}(g_\text{color}),\ t) - \angle(d_\text{shape}(g_\text{shape}),\ t)
+  ]
+
+Angles are **undirectional** (in [0°, 90°]). **Positive** values mean “own attention helps that axis align better to the target.”
+If shuffles are enabled with `repeats > 1`, we overlay dashed **shuffle mean** curves with shaded **95% CI**.
+
+---
+
+## 5) Standalone reproduction from CSV/JSON (no model code)
+
+After you’ve generated the outputs once, readers can **reproduce the figures without running the model** by using the standalone script:
+
+```bash
+python reproduce_panels_from_csv.py \
+  --triad-dir outputs/paper_main \
+  --sweep-dir outputs/paper_main_triad_sweep \
+  --out-dir outputs/paper_main/repro_from_csv \
+  --elev 25 --azim 135 \
+  --dpi 300 --transparent
+```
+
+This reads `panel_b_points.csv`, `panel_b_axes.json`, `panel_c_activity_data.csv`, `panel_c_gopt_data.csv`, and `panel_d_data.csv` and recreates **panel_b_color_repro.***, **panel_b_shape_repro.***, **panel_c_repro.***, **panel_c_gopt_repro.***, **panel_d_full_repro.***, and **panel_d_repro.***.
+The script includes descriptions of what each panel shows for readers.
+
+---
+
+## 6) Configuration guide
+
+Use `configs/paper.yaml` as a template for your experiments. Highlights: 
 
 ```yaml
-# configs/smallpc1_ball.yaml
-tag: smallpc1_ball
+tag: paper
 save_dir: outputs
 
 network:
@@ -88,274 +187,112 @@ network:
   desired_radius: 0.9
   p_high: 0.2
   p_low: 0.2
-  zero_sum: row         # {row, none, row_and_col} → 'row' ~ small PC1 regime
+  zero_sum: row         # small PC1 regime (use "none" for dominant PC1)
   wr_tuned: false
   weight_scale: 0.1
+  baseline_equalize: true  # rescale feedforward columns so baseline shape/color modulations match
 
 objective:
-  target_type: custom_pc  # {pc1, pc2, custom_pc}
-  theta_deg: 30.0         # for custom_pc: azimuth in PC1-PC2
-  phi_deg: 25.0           # elevation towards PC3
-  axis_of_interest: color # {color, shape, custom_line}
-  shape_for_color_line: 0.3
-  color_for_shape_line: 0.3
-  # custom_stim_line_start/end required only if axis_of_interest: custom_line
+  target_type: custom_pc # or pc1/pc2
+  theta_deg: 45.0        # azimuth in PC1–PC2 plane
+  phi_deg: 60.0          # elevation toward PC3
+  axis_of_interest: color
+  shape_for_color_line: 0.3  # slice for color axis (fix shape and vary color)
+  color_for_shape_line: 0.6  # slice for shape axis (fix color and vary shape)
 
 constraints:
-  type: ball              # {ball, box}
-  radius: 0.12            # for ball: L2 radius fraction (absolute R = radius * sqrt(N))
-  box_half_width: 0.2     # for box: half-width around g=1
-  hard_norm: true         # enforce ||axis(g)|| == ||axis(1)||
-  positive_gains: false   # set true to constrain g_i >= 0
-
-grid:
-  shape_vals: [0.0, 0.33, 0.66, 1.0]   # or use 11 points: [0.0, 0.1, ..., 1.0]
-  color_vals: [0.0, 0.33, 0.66, 1.0]
+  type: ball             # or box
+  radius: 0.05           # L2 ball: ||g−1||₂ ≤ radius * sqrt(N)
+  box_half_width: 0.2    # if type: box, each g_i ∈ [1−w, 1+w]
+  hard_norm: true        # keep ||axis(g)|| equal to baseline ||axis(1)||
+  positive_gains: false  # set true to force g_i ≥ 0
 
 shuffle:
   enabled: true
-  num_bins: 10             # number of selectivity bins
-  binning: quantile        # {quantile, equal}
-  mode: independent        # {independent, paired}
-  seed: 1234               # if omitted, uses network.seed + 101
+  num_bins: 8
+  binning: quantile      # or equal
+  mode: independent      # or paired
+  seed: 2025             # optional; default = network.seed + 101
+  repeats: 50            # for panel D mean ± 95% CI
+
+grid:
+  shape_vals: [0.0, 0.1, ..., 1.0]
+  color_vals: [0.0, 0.1, ..., 1.0]
+
+sweep:
+  ranges_ball: [0.02, 0.04, 0.06, 0.08, 0.10, 0.14, 0.18, 0.22, 0.26, 0.30]
+  ranges_box:  [0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20]
 ```
 
-### Key concepts
+**Common customizations**
 
-- **Network** (`network.py`):
-  - Linear recurrent model with feedforward `W_F` built from a selectivity matrix `S`.
-  - Recurrent `W_R` block structure; optional row/column zero-sum enforcement (`zero_sum`).
-  - Spectral normalization to set a desired spectral radius.
-- **Target** (`objectives.py`):
-  - `pc1`, `pc2`, or `custom_pc` (spherical angles in 3D PC space).
-  - Mapped back to neuron space using the unmodulated PCA components.
-- **Axis of interest** (`color` / `shape` / `custom_line`):
-  - `color`: response difference along color at fixed shape.
-  - `shape`: response difference along shape at fixed color.
-  - `custom_line`: response difference between two custom stimulus points.
-- **Constraints** (`constraints.py`):
-  - **Ball**: ( |g-1|_2 \le R), with (R = \text{radius}\cdot\sqrt{N}).
-  - **Box**: ( g_i \in [1-w, 1+w]).
-  - `hard_norm: true` keeps the feature-axis norm constant.
-  - Optional `positive_gains` to force (g_i \ge 0).
-- **Shuffle** (`shuffle.py`):
-  - Bin neurons by selectivity ( \text{sel} = S_{:,1} - S_{:,0}).
-  - Shuffle gains **within bins**:
-    - `independent`: shuffle color and shape gains independently within each bin.
-    - `paired`: apply the **same permutation** within each bin to ((g_\text{color}, g_\text{shape})) pairs.
-  - Compute **cross-attend** angles again under shuffled gains.
+* **Dominant vs small PC1**: `network.zero_sum: none` (dominant PC1) vs `row` or `row_and_col` (small PC1).
+* **Target direction**:
 
-> PCA is **always** fit on the **unmodulated** grid and reused (we never refit PCA on modulated data).
+  * Use `target_type: pc1|pc2` for the principal axes directly.
+  * Use `custom_pc` with `theta_deg` and `phi_deg` to set an arbitrary 3D direction.
+* **Axis definition points**:
 
-------
+  * `shape_for_color_line`: fix **shape** here and vary **color** to define the **color** axis.
+  * `color_for_shape_line`: fix **color** here and vary **shape** to define the **shape** axis.
+* **Constraints**:
 
-## 4) Commands (CLI)
+  * **Ball**: tune `radius` (fraction of √N).
+  * **Box**: tune `box_half_width` (per‑neuron bounds around 1).
+  * `hard_norm: true` enforces axis‑norm equality (pure rotations).
+* **Shuffle test**:
 
-All commands run as a module:
+  * `num_bins`, `binning` control binning of selectivity = (color − shape).
+  * `mode: independent` shuffles each gain vector independently within bins; `paired` applies the same permutation to the (g_color, g_shape) pairs per bin.
+  * `repeats` controls how many shuffled replicas to average (panel D mean ± 95% CI).
+
+---
+
+## 7) CLI reference (most relevant flags)
 
 ```bash
-python -m alignlab.cli <subcommand> [flags]
+# Triad (3-panel; add paper panels)
+python -m alignlab.cli triad --config <cfg.yaml> [--paper-panels] [--show] [--elev <deg>] [--azim <deg>]
+
+# Triad sweep (range vs improvement; add panel_d)
+python -m alignlab.cli triad-sweep --config <cfg.yaml> [--paper-panels]
 ```
 
-### A) Single alignment run
+* `--paper-panels` → write **panel_b/panel_c** (triad) or **panel_d** (sweep) + per‑figure CSV.
+* `--show` + `--elev`/`--azim` → open an interactive 3D window and set a nice initial view.
+  (No `--zlim` needed by default; pass it only if you want to fix PC3 scale.)
 
-```bash
-python -m alignlab.cli run \
-  --config configs/smallpc1_ball.yaml \
-  --style original \
-  --zlim -1 1 \
-  --show --elev 25 --azim 135
-```
-
-- `--style original` → two-panel 3D scatter (Unmod | Mod) with your line overlays and colorbar.
-- `--zlim ZMIN ZMAX` → fix z-axis limits (e.g., `-1 1`) without rescaling data.
-- `--show` + `--elev/--azim` → open interactive window with initial camera angles.
-- Outputs in `outputs/<tag>/`:
-  - `<tag>_embedding_twopanel.(png|pdf)`
-  - `<tag>_gains_vs_selectivity.(png|pdf)`
-  - `<tag>_summary.json` (rich metrics; see **Outputs** below)
-
-### B) Single-axis sweep (legacy)
-
-```bash
-python -m alignlab.cli sweep \
-  --config configs/smallpc1_ball.yaml \
-  --ranges 0.02 0.04 0.08 0.12 0.16
-```
-
-- Varies **constraint strength** (ball radius fraction or box half-width).
-- Plots **Δ angle (axis moved)** vs range:
-  - `<tag>_range_vs_degree.(png|pdf)`
-  - `<tag>_sweep.json`
-
-### C) Triad run (Color-attend & Shape-attend)
-
-```bash
-python -m alignlab.cli triad \
-  --config configs/smallpc1_ball.yaml \
-  --zlim -1 1 --show --elev 25 --azim 135 \
-  --gcompare ratio        # or --gcompare diff ; add --logratio if gains are positive
-```
-
-- Fits PCA on **unmodulated**, then runs **two** optimizations:
-  - Color-axis aligned → gains $g_\text{color}$
-  - Shape-axis aligned → gains $g_\text{shape}$
-- Three-panel plot: Unmod | Color-aligned | Shape-aligned
-- Gains comparison: color vs shape (ratio or difference)
-- If `shuffle.enabled: true`, the triad JSON **also** includes shuffled cross-attend angles.
-- Outputs in `outputs/<tag>/`:
-  - `<tag>_triad_threepanel.(png|pdf)`
-  - `<tag>_gains_ratio_color_over_shape.(png|pdf)` (or `_diff_...` if `--gcompare diff`)
-  - `<tag>_triad_summary.json`
-
-### D) Triad sweep (Cross-attend angles vs range)
-
-```bash
-python -m alignlab.cli triad-sweep \
-  --config configs/smallpc1_ball.yaml \
-  --ranges 0.02 0.04 0.08 0.12 0.16
-```
-
-- For each range, runs the full triad and records:
-  - **Color cross-attend angle**: angle between the **color axis** under color gains vs under shape gains.
-  - **Shape cross-attend angle**: angle between the **shape axis** under color gains vs under shape gains.
-  - If shuffle is enabled, also the **shuffled** versions of both angles.
-- Outputs in `outputs/<tag>_triad_sweep/`:
-  - `<tag>_triad_cross_sweep.(png|pdf)` (2 lines; **4 lines** if shuffle is enabled)
-  - `<tag>_triad_sweep.json`
-
-> **Note:** `triad-sweep` uses the **shuffle settings from YAML** (`shuffle:` block). Change them there.
-
-------
-
-## 5) Outputs & JSON fields
-
-### Single run (`<tag>_summary.json`)
-
-Key fields:
-
-- `final_objective`, `iterations`, `func_evals`, `grad_evals`
-- `angles_deg`:
-  - `unmod_to_target`, `opt_to_target`, `delta_opt_vs_unmod`, `improvement` (pre − post)
-- `axis_norms`:
-  - `pre`, `post`, `equality_residual` (≈0 if `hard_norm: true`)
-- `constraint_residuals`:
-  - **ball**: `R_fraction`, `R_absolute`, `residual_l2`, `residual_sq`
-  - **box**: `half_width`, `max_abs_violation`, counts at bounds
-- `g_stats`: min/max/mean/std, ‖g−1‖₂, ‖g−1‖∞
-- `pca.explained_variance_ratio` (top-3)
-- Full `cfg` snapshot (enums flattened)
-
-### Triad run (`<tag>_triad_summary.json`)
-
-Adds:
-
-- `color_alignment` and `shape_alignment` blocks (each has objective, iterations, angles, norms, constraint residuals, g-stats)
-- `cross_attend`:
-  - `color_axis_angle_deg` (angle between color axis under color gains vs under shape gains)
-  - `shape_axis_angle_deg` (angle between shape axis under color gains vs under shape gains)
-  - Norms under each attention state
-- `gain_comparison`:
-  - `ratio_color_over_shape` or `diff_color_minus_shape` (min/max/mean/median/std)
-- `shuffle` (if enabled):
-  - `mode`, `num_bins`, `binning`, `seed`
-  - `cross_attend.color_axis_angle_deg` / `shape_axis_angle_deg` under shuffled gains
-  - Axis norms under shuffled gains
-
-### Triad sweep (`<tag>_triad_sweep.json`)
-
-- One row per range:
-  - `color_cross_attend_deg`, `shape_cross_attend_deg`
-  - `color_cross_attend_deg_shuf`, `shape_cross_attend_deg_shuf` (if shuffle enabled)
-  - `success_color`, `success_shape`
-- Top-level `shuffle` block echoes the sweep settings used.
-
-------
-
-## 6) Practical Tips
-
-- **PC basis sanity**: We always do `Z_opt = pca.transform(X_opt)` to project modulated responses into the **same** PCA basis; we never refit on modulated data.
-- **Choosing ranges**:
-  - Ball: start with `[0.02, 0.04, 0.08, 0.12, 0.16]`.
-  - Box: start with `[0.05, 0.10, 0.15, 0.20]`.
-- **Hard norm**: Keep it `true` to ensure improvements come from rotation, not scaling.
-- **Positive gains**: Use `positive_gains: true` if you plan to use log-ratios for gains plots.
-- **Grid density**: For publication figures, consider 11×11 grids (set both `shape_vals` and `color_vals` to `[0.0, 0.1, …, 1.0]`).
-- **Dominant vs small PC1**: `network.zero_sum: none` usually yields dominant PC1; `row` (or `row_and_col`) tends to make PC1 & PC2 comparable.
-
-------
-
-## 7) Troubleshooting
-
-- **`ModuleNotFoundError: alignlab`**
-   Run `pip install -e .` from the repo root.
-
-- **No interactive 3D window pops up**
-   Set a GUI backend:
-
-  ```bash
-  export MPLBACKEND=MacOSX   # macOS
-  # or:
-  conda install pyqt
-  export MPLBACKEND=QtAgg
-  ```
-
-  Then add `--show` to your CLI command.
-
-- **Axis out of plane / looks wrong**
-   Ensure the code path uses `pca.transform(...)` for modulated data (this repo does).
-
-- **Enums from YAML**
-   Accepted strings:
-
-  - `network.zero_sum`: `row`, `none`, `row_and_col`
-  - `objective.target_type`: `pc1`, `pc2`, `custom_pc`
-  - `objective.axis_of_interest`: `color`, `shape`, `custom_line`
-  - `constraints.type`: `ball`, `box`
-  - `shuffle.binning`: `quantile`, `equal`
-  - `shuffle.mode`: `independent`, `paired`
-
-- **Optimizer stuck / not improving**
-   Try loosening the constraint (bigger radius / box width), or disable `hard_norm` to check if scaling is the limiter. Confirm feasibility via `constraint_residuals`.
-
-------
+---
 
 ## 8) Reproducibility
 
-- **Seeds**: The network, PCA, and (by default) the shuffle RNG are deterministic:
-  - network/PCA: `network.seed`
-  - shuffle: `shuffle.seed` (if omitted: `network.seed + 101`)
-- Runs are fully determined by the YAML + command args.
+* **Determinism**:
 
-------
+  * `network.seed` controls network initialization, PCA, etc.
+  * `shuffle.seed` (or default = `network.seed + 101`) controls shuffling.
+* PCA is **always fitted on unmodulated responses** and reused for all projections in a run (no basis mismatch).
+* All figures are saved as **PNG (300 dpi)** and **vector PDF/SVG**.
 
-## 9) Minimal Examples
+---
 
-**Color alignment (ball) with interactive plot**
+## 9) Troubleshooting
 
-```bash
-python -m alignlab.cli run \
-  --config configs/smallpc1_ball.yaml \
-  --style original \
-  --zlim -1 1 --show --elev 25 --azim 135
-```
+* **`ModuleNotFoundError: alignlab`** → run `pip install -e .` from the repo root.
+* **No interactive window** → set a GUI backend (`export MPLBACKEND=MacOSX`, or install `pyqt5` and use `QtAgg`).
+* **Optimization feels stuck** → try relaxing constraints (larger ball radius / box width), or set `hard_norm: false` to diagnose feasibility.
+* **Angles seem flipped** → all angles are **undirectional** by design (min(θ, 180°−θ)).
+  If you need oriented angles for diagnostics only, compute them ad‑hoc (not used in paper).
 
-**Triad (3-panel) and gains ratio**
+---
 
-```bash
-python -m alignlab.cli triad \
-  --config configs/smallpc1_ball.yaml \
-  --zlim -1 1 --show --elev 25 --azim 135 \
-  --gcompare ratio
-```
+## 10) Recreate figures from CSV only
 
-**Triad sweep (4 lines if shuffle enabled)**
+See **`reproduce_panels_from_csv.py`** for a fully standalone reproducer that renders **panel_b/panel_c/panel_d** from the saved CSV/JSON without any model code.
 
 ```bash
-python -m alignlab.cli triad-sweep \
-  --config configs/smallpc1_ball.yaml \
-  --ranges 0.02 0.04 0.08 0.12 0.16
+python reproduce_panels_from_csv.py \
+  --triad-dir outputs/<tag> \
+  --sweep-dir outputs/<tag>_triad_sweep \
+  --out-dir outputs/<tag>/repro_from_csv \
+  --elev 25 --azim 135 --dpi 300 --transparent
 ```
-
-------
-

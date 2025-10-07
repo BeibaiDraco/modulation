@@ -70,10 +70,14 @@ python -m alignlab.cli triad \
 **Outputs** (in `outputs/<tag>/`):
 
 * `*_triad_threepanel.(png|pdf)` — Unmod | Color‑attend | Shape‑attend (3D)
-* `panel_b.(png|pdf|svg)` — two attention clouds + all feature/target axes (3D)
-* `panel_c.(png|pdf|svg)` — gain comparison vs selectivity
-* `panel_b_points.csv`, `panel_b_axes.json`, `panel_c_data.csv`
+* `panel_b_color.(png|pdf|svg)` — color-attend cloud (bold) + axes under color gains
+* `panel_b_shape.(png|pdf|svg)` — shape-attend cloud (bold) + axes under shape gains
+* `panel_c.(png|pdf|svg)` — activity-derived gain ratio (color ÷ shape)
+* `panel_c_gopt.(png|pdf|svg)` — optimized gain ratio (color ÷ shape)
+* `panel_b_points.csv`, `panel_b_axes.json`
+* `panel_c_activity_data.csv`, `panel_c_gopt_data.csv`
 * `*_triad_summary.json` (angles, norms, gains, constraints, shuffle details, etc.)
+*Default view for panel B figures is elev=30°, azim=166° (the same look you get from `--elev 30 --azim 166`).*
 
 ### B) Triad‑sweep (produces **panel_d**)
 
@@ -85,7 +89,8 @@ python -m alignlab.cli triad-sweep \
 
 **Outputs** (in `outputs/<tag>_triad_sweep/`):
 
-* `panel_d.(png|pdf|svg)` — **improvement‑to‑target vs range**, with shuffled **mean ± 95% CI** if `shuffle.repeats > 1`
+* `panel_d_full.(png|pdf|svg)` — color + shape improvements vs range (with shuffled 95% CI if available)
+* `panel_d.(png|pdf|svg)` — color-axis improvement vs range (with shuffled 95% CI if available)
 * `panel_d_data.csv` — source data
 * `*_triad_sweep.json` — rows for each range (includes improvements and shuffle stats)
 
@@ -112,8 +117,10 @@ python -m alignlab.cli triad-sweep \
 
 ### Panel C — Gains vs selectivity
 
-* **x**: neuron selectivity = (*color − shape*)
-* **y**: `log2(g_color / g_shape)` (zero line shown; positive = relatively larger color‑attend gain)
+* **Activity-derived**: gain ratio from responses = |Δr_color| / |Δr_shape|
+* **Optimized g**: gain ratio from parameters = g_color / g_shape
+* **x**: neuron selectivity = (*shape − color*)
+* **y**: gain ratio (color / shape), unity line at 1.0 for reference
 
 ### Panel D — Improvement‑to‑target vs constraint range
 
@@ -148,7 +155,7 @@ python reproduce_panels_from_csv.py \
   --dpi 300 --transparent
 ```
 
-This reads `panel_b_points.csv`, `panel_b_axes.json`, `panel_c_data.csv`, and `panel_d_data.csv` and recreates **panel_b_repro.***, **panel_c_repro.***, and **panel_d_repro.***.
+This reads `panel_b_points.csv`, `panel_b_axes.json`, `panel_c_activity_data.csv`, `panel_c_gopt_data.csv`, and `panel_d_data.csv` and recreates **panel_b_color_repro.***, **panel_b_shape_repro.***, **panel_c_repro.***, **panel_c_gopt_repro.***, **panel_d_full_repro.***, and **panel_d_repro.***.
 The script includes descriptions of what each panel shows for readers.
 
 ---
@@ -171,6 +178,7 @@ network:
   zero_sum: row         # small PC1 regime (use "none" for dominant PC1)
   wr_tuned: false
   weight_scale: 0.1
+  baseline_equalize: true  # rescale feedforward columns so baseline shape/color modulations match
 
 objective:
   target_type: custom_pc # or pc1/pc2
@@ -276,4 +284,3 @@ python reproduce_panels_from_csv.py \
   --out-dir outputs/<tag>/repro_from_csv \
   --elev 25 --azim 135 --dpi 300 --transparent
 ```
-

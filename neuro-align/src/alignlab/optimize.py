@@ -412,10 +412,19 @@ def optimize_triad(cfg):
             "std": float(np.std(x)),
         }
 
+    wf_scales = np.array(getattr(net, "_wf_scales", np.ones(net.K, dtype=float)), dtype=float)
+    baseline_equalization = {
+        "enabled": bool(getattr(cfg.network, "baseline_equalize", False)),
+        "wf_scales": wf_scales.tolist(),
+    }
+    if hasattr(net, "_baseline_equalize_error"):
+        baseline_equalization["error"] = getattr(net, "_baseline_equalize_error")
+
     summary = {
         "pca": {
             "explained_variance_ratio": [float(x) for x in pca.explained_variance_ratio_.tolist()],
         },
+        "baseline_equalization": baseline_equalization,
         "to_target": to_target,
         "unmod": {
             "color_axis_norm": float(np.linalg.norm(d_color0)),
@@ -643,4 +652,3 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
         },
         "metric": "improvement_to_target",  # explicit: this sweep uses Δ to-target
     }
-

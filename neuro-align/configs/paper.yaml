@@ -14,8 +14,8 @@ network:
 
 objective:
   target_type: custom_pc
-  theta_deg: 45.0       # target direction in PC space
-  phi_deg: 60.0
+  theta_deg: 166.0       # target direction in PC space
+  phi_deg: 45.0
   axis_of_interest: color
   shape_for_color_line: 0.3
   color_for_shape_line: 0.6

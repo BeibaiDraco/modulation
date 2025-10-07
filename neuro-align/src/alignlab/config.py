@@ -33,6 +33,7 @@ class NetworkConfig:
     zero_sum: WRNormalization = WRNormalization.ROW
     wr_tuned: bool = False
     weight_scale: float = 0.1
+    baseline_equalize: bool = False
 
 @dataclass
 class ObjectiveConfig:

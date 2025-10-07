@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Iterable, Sequence, Optional
+from typing import Iterable, Sequence, Optional, Any
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -373,6 +373,220 @@ def draw_bivariate_legend(fig, ax, *, loc=(0.72, 0.68, 0.24, 0.24)):
     for s in a.spines.values():
         s.set_linewidth(0.8)
 
+def _panel_b_save_data(
+    outdir: Path,
+    Z_color: np.ndarray,
+    Z_shape: np.ndarray,
+    shape_list: np.ndarray,
+    color_list: np.ndarray,
+    target_pc: np.ndarray,
+    col_c_pc: np.ndarray,
+    col_s_pc: np.ndarray,
+    shp_c_pc: np.ndarray,
+    shp_s_pc: np.ndarray,
+) -> None:
+    rows = []
+    N = Z_color.shape[0]
+    for i in range(N):
+        rows.append((
+            "color",
+            Z_color[i, 0], Z_color[i, 1], Z_color[i, 2],
+            float(shape_list[i]), float(color_list[i])
+        ))
+    for i in range(N):
+        rows.append((
+            "shape",
+            Z_shape[i, 0], Z_shape[i, 1], Z_shape[i, 2],
+            float(shape_list[i]), float(color_list[i])
+        ))
+    _save_csv(
+        outdir / "panel_b_points.csv",
+        ["state", "pc1", "pc2", "pc3", "shape", "color"],
+        rows,
+    )
+    _save_json(outdir / "panel_b_axes.json", {
+        "target_pc": target_pc.tolist(),
+        "color_axis_color_pc": col_c_pc.tolist(),
+        "color_axis_shape_pc": col_s_pc.tolist(),
+        "shape_axis_shape_pc": shp_s_pc.tolist(),
+        "shape_axis_color_pc": shp_c_pc.tolist(),
+    })
+
+
+def _draw_offset_line(ax, v: np.ndarray, Z_all: np.ndarray,
+                      scale: float = 1.8, offset_frac: float = 0.12,
+                      color: str = 'crimson', lw: float = 2.8) -> None:
+    v = np.asarray(v).ravel()
+    if np.linalg.norm(v) < 1e-12:
+        return
+    v = v / (np.linalg.norm(v) + 1e-12)
+    mins = Z_all.min(axis=0)
+    maxs = Z_all.max(axis=0)
+    span = np.maximum(maxs - mins, 1e-6)
+    start = np.array([0.0, mins[1] + offset_frac * span[1], 0.0], dtype=float)
+    length = scale * np.max(span) * 0.25
+    p0 = start
+    p1 = start + length * v
+    ax.plot([p0[0], p1[0]], [p0[1], p1[1]], [p0[2], p1[2]], lw=lw, color=color)
+
+
+def plot_panel_b_color_state(
+    Z_color: np.ndarray,
+    Z_shape: np.ndarray,
+    pca_components,
+    target_vec_neuron: np.ndarray,
+    color_axis_color: np.ndarray,
+    color_axis_shape: np.ndarray,
+    shape_axis_color: np.ndarray,
+    shape_axis_shape: np.ndarray,
+    shape_vals: Sequence[float],
+    color_vals: Sequence[float],
+    outdir: Path,
+    tag: str,
+    *,
+    zlim=None,
+    elev=None,
+    azim=None,
+    show: bool = False,
+    save_data: bool = False,
+) -> None:
+    _ensure_dir(outdir)
+    comps = pca_components[:3, :]
+    t_pc = comps @ target_vec_neuron
+    col_c = comps @ color_axis_color
+    col_s = comps @ color_axis_shape
+    shp_c = comps @ shape_axis_color
+    shp_s = comps @ shape_axis_shape
+
+    shape_list = np.array([s for s in shape_vals for _c in color_vals], dtype=float)
+    color_list = np.array([c for _s in shape_vals for c in color_vals], dtype=float)
+    bicolors = bivariate_colors(shape_list, color_list)
+
+    fig = plt.figure(figsize=(7.2, 6.0))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.scatter(
+        Z_color[:, 0], Z_color[:, 1], Z_color[:, 2],
+        s=28, marker='o', c=bicolors, edgecolors='none', alpha=0.95,
+        label="color-attend"
+    )
+
+    Z_all = np.vstack([Z_color, Z_shape])
+    _draw_offset_line(ax, t_pc, Z_all, color='crimson', lw=2.8)
+
+    ax.plot([0, col_c[0]], [0, col_c[1]], [0, col_c[2]],
+            lw=2.2, color='darkorange', label="Color axis (color)")
+    ax.plot([0, shp_c[0]], [0, shp_c[1]], [0, shp_c[2]],
+            lw=2.2, color='seagreen', label="Shape axis (color)")
+
+    if zlim is not None:
+        ax.set_zlim(zlim)
+    ax.set_box_aspect((1, 1, 1))
+    ax.set_xlabel('PC1'); ax.set_ylabel('PC2'); ax.set_zlabel('PC3')
+    elev_used = 30 if elev is None else elev
+    azim_used = 166 if azim is None else azim
+    ax.view_init(elev=elev_used, azim=azim_used)
+
+    from matplotlib.lines import Line2D
+    legend_elems = [
+        Line2D([0], [0], color='crimson', lw=2.8, label='Target (offset)'),
+        Line2D([0], [0], color='darkorange', lw=2.2, label='Color axis (color)'),
+        Line2D([0], [0], color='seagreen', lw=2.2, label='Shape axis (color)'),
+    ]
+    ax.legend(handles=legend_elems, loc='upper right', frameon=True, fontsize=9)
+    draw_bivariate_legend(fig, ax)
+    plt.title(f"Panel B — Color attend ({tag})")
+    plt.tight_layout()
+    for ext in ("png", "pdf", "svg"):
+        plt.savefig(outdir / f"panel_b_color.{ext}", dpi=300,
+                    bbox_inches="tight", transparent=True)
+    if show:
+        plt.show()
+    plt.close(fig)
+
+    if save_data:
+        _panel_b_save_data(
+            outdir,
+            Z_color, Z_shape,
+            shape_list, color_list,
+            t_pc, col_c, col_s, shp_c, shp_s
+        )
+
+
+def plot_panel_b_shape_state(
+    Z_color: np.ndarray,
+    Z_shape: np.ndarray,
+    pca_components,
+    target_vec_neuron: np.ndarray,
+    color_axis_color: np.ndarray,
+    color_axis_shape: np.ndarray,
+    shape_axis_color: np.ndarray,
+    shape_axis_shape: np.ndarray,
+    shape_vals: Sequence[float],
+    color_vals: Sequence[float],
+    outdir: Path,
+    tag: str,
+    *,
+    zlim=None,
+    elev=None,
+    azim=None,
+    show: bool = False,
+) -> None:
+    _ensure_dir(outdir)
+    comps = pca_components[:3, :]
+    t_pc = comps @ target_vec_neuron
+    col_c = comps @ color_axis_color
+    col_s = comps @ color_axis_shape
+    shp_c = comps @ shape_axis_color
+    shp_s = comps @ shape_axis_shape
+
+    shape_list = np.array([s for s in shape_vals for _c in color_vals], dtype=float)
+    color_list = np.array([c for _s in shape_vals for c in color_vals], dtype=float)
+    bicolors = bivariate_colors(shape_list, color_list)
+
+    fig = plt.figure(figsize=(7.2, 6.0))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.scatter(
+        Z_shape[:, 0], Z_shape[:, 1], Z_shape[:, 2],
+        s=28, marker='^', c=bicolors, edgecolors='none', alpha=0.95,
+        label="shape-attend"
+    )
+
+    Z_all = np.vstack([Z_color, Z_shape])
+    _draw_offset_line(ax, t_pc, Z_all, color='crimson', lw=2.8)
+
+    ax.plot([0, col_s[0]], [0, col_s[1]], [0, col_s[2]],
+            lw=2.2, color='darkorange', label="Color axis (shape)")
+    ax.plot([0, shp_s[0]], [0, shp_s[1]], [0, shp_s[2]],
+            lw=2.2, color='seagreen', label="Shape axis (shape)")
+
+    if zlim is not None:
+        ax.set_zlim(zlim)
+    ax.set_box_aspect((1, 1, 1))
+    ax.set_xlabel('PC1'); ax.set_ylabel('PC2'); ax.set_zlabel('PC3')
+    elev_used = 30 if elev is None else elev
+    azim_used = 166 if azim is None else azim
+    ax.view_init(elev=elev_used, azim=azim_used)
+
+    from matplotlib.lines import Line2D
+    legend_elems = [
+        Line2D([0], [0], color='crimson', lw=2.8, label='Target (offset)'),
+        Line2D([0], [0], color='darkorange', lw=2.2, label='Color axis (shape)'),
+        Line2D([0], [0], color='seagreen', lw=2.2, label='Shape axis (shape)'),
+    ]
+    ax.legend(handles=legend_elems, loc='upper right', frameon=True, fontsize=9)
+    draw_bivariate_legend(fig, ax)
+    plt.title(f"Panel B — Shape attend ({tag})")
+    plt.tight_layout()
+    for ext in ("png", "pdf", "svg"):
+        plt.savefig(outdir / f"panel_b_shape.{ext}", dpi=300,
+                    bbox_inches="tight", transparent=True)
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
 def plot_panel_b(
     Z_color, Z_shape,
     pca_components,
@@ -381,115 +595,151 @@ def plot_panel_b(
     shape_axis_color, shape_axis_shape,
     shape_vals, color_vals,
     outdir: Path,
-    *, zlim=None, elev=None, azim=None, show=False
+    *, zlim=None, elev=None, azim=None, show=False, tag: str = "experiment"
 ):
+    """
+    Backwards-compatible entry point: render both color- and shape-state views.
+    """
+    plot_panel_b_color_state(
+        Z_color, Z_shape, pca_components, target_vec_neuron,
+        color_axis_color, color_axis_shape,
+        shape_axis_color, shape_axis_shape,
+        shape_vals, color_vals, outdir, tag,
+        zlim=zlim, elev=elev, azim=azim, show=show, save_data=True
+    )
+    plot_panel_b_shape_state(
+        Z_color, Z_shape, pca_components, target_vec_neuron,
+        color_axis_color, color_axis_shape,
+        shape_axis_color, shape_axis_shape,
+        shape_vals, color_vals, outdir, tag,
+        zlim=zlim, elev=elev, azim=azim, show=show
+    )
+
+def plot_panel_c_activity(net: Any, cfg: Any,
+                          g_color: NDArray[np.float64], g_shape: NDArray[np.float64],
+                          outdir: Path, tag: Optional[str] = None,
+                          logratio: bool = False, show: bool = False) -> None:
+    """
+    Panel C (activity-derived, linear):
+      x = selectivity (shape - color)
+      y = |Δr_color(g_color)| / |Δr_shape(g_shape)|
+    """
     _ensure_dir(outdir)
-    comps = pca_components[:3, :]
-    t_pc   = comps @ target_vec_neuron
-    col_c  = comps @ color_axis_color
-    col_s  = comps @ color_axis_shape
-    shp_s  = comps @ shape_axis_shape
-    shp_c  = comps @ shape_axis_color
 
-    shape_list = np.array([s for s in shape_vals for _c in color_vals], dtype=float)
-    color_list = np.array([c for _s in shape_vals for c in color_vals], dtype=float)
-    bicolors = bivariate_colors(shape_list, color_list)
+    shape_const = cfg.objective.shape_for_color_line
+    color_const = cfg.objective.color_for_shape_line
 
-    fig = plt.figure(figsize=(7.5, 6.5))
-    ax = fig.add_subplot(111, projection='3d')
+    # color modulation under color-attend
+    r_c0 = net.response(shape_const, 0.0, g=g_color)
+    r_c1 = net.response(shape_const, 1.0, g=g_color)
+    d_color_col = r_c1 - r_c0
 
-    ax.scatter(Z_color[:,0], Z_color[:,1], Z_color[:,2],
-               s=22, marker='o', c=bicolors, edgecolors='none', alpha=0.95, label="color-attend")
-    ax.scatter(Z_shape[:,0], Z_shape[:,1], Z_shape[:,2],
-               s=22, marker='^', c=bicolors, edgecolors='none', alpha=0.95, label="shape-attend")
+    # shape modulation under shape-attend
+    r_s0 = net.response(0.0, color_const, g=g_shape)
+    r_s1 = net.response(1.0, color_const, g=g_shape)
+    d_shape_shp = r_s1 - r_s0
 
-    line3d(ax, t_pc, two_sided=False, linewidth=2.5, color='crimson')
-    ax.plot([0, col_c[0]], [0, col_c[1]], [0, col_c[2]], lw=2.2, color='darkorange', label="color axis (color)")
-    ax.plot([0, col_s[0]], [0, col_s[1]], [0, col_s[2]], lw=2.2, color='darkorange', ls='--', label="color axis (shape)")
-    ax.plot([0, shp_s[0]], [0, shp_s[1]], [0, shp_s[2]], lw=2.2, color='seagreen',  label="shape axis (shape)")
-    ax.plot([0, shp_c[0]], [0, shp_c[1]], [0, shp_c[2]], lw=2.2, color='seagreen',  ls='--', label="shape axis (color)")
+    eps = 1e-12
+    ratio = (np.abs(d_color_col) + eps) / (np.abs(d_shape_shp) + eps)
+    sel_sc = net.S[:, 0] - net.S[:, 1]
 
-    if zlim is not None:
-        ax.set_zlim(zlim)
-    ax.set_box_aspect((1,1,1))
-    ax.set_xlabel('PC1'); ax.set_ylabel('PC2'); ax.set_zlabel('PC3')
-
-    if (elev is not None) or (azim is not None):
-        ax.view_init(elev=elev if elev is not None else ax.elev,
-                     azim=azim if azim is not None else ax.azim)
-
-    from matplotlib.lines import Line2D
-    legend_elems = [
-        Line2D([0],[0], color='crimson',    lw=2.5, label='Target'),
-        Line2D([0],[0], color='darkorange', lw=2.2, label='Color axis (color)'),
-        Line2D([0],[0], color='darkorange', lw=2.2, ls='--', label='Color axis (shape)'),
-        Line2D([0],[0], color='seagreen',   lw=2.2, label='Shape axis (shape)'),
-        Line2D([0],[0], color='seagreen',   lw=2.2, ls='--', label='Shape axis (color)'),
-    ]
-    ax.legend(handles=legend_elems, loc='upper right', frameon=True, fontsize=9)
-
-    draw_bivariate_legend(fig, ax)
+    fig = plt.figure(figsize=(5.8, 4.8))
+    plt.axhline(1.0, color='k', lw=1.0, ls='--', alpha=0.6)
+    sc = plt.scatter(sel_sc, ratio, c=sel_sc, cmap='bwr', alpha=0.85, edgecolors='none', s=24)
+    cb = plt.colorbar(sc); cb.set_label('Selectivity (shape - color)')
+    plt.xlabel('Selectivity (shape - color)')
+    plt.ylabel('Gain ratio (color / shape) from activity')
+    if tag:
+        plt.title(f"Activity-derived gain ratio — {tag}")
+    plt.grid(True, linestyle=':')
     plt.tight_layout()
-    for ext in ("png","pdf","svg"):
-        plt.savefig(outdir / f"panel_b.{ext}", dpi=300, bbox_inches="tight", transparent=True)
-    if show: plt.show()
+    for ext in ("png", "pdf", "svg"):
+        plt.savefig(outdir / f"panel_c.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+    if show:
+        plt.show()
     plt.close(fig)
 
-    # data
     rows = []
-    N = Z_color.shape[0]
-    for i in range(N):
-        rows.append(("color", Z_color[i,0], Z_color[i,1], Z_color[i,2], float(shape_list[i]), float(color_list[i])))
-    for i in range(N):
-        rows.append(("shape", Z_shape[i,0], Z_shape[i,1], Z_shape[i,2], float(shape_list[i]), float(color_list[i])))
-    _save_csv(outdir / "panel_b_points.csv",
-              ["state","pc1","pc2","pc3","shape","color"], rows)
-    _save_json(outdir / "panel_b_axes.json", {
-        "target_pc": t_pc.tolist(),
-        "color_axis_color_pc": col_c.tolist(),
-        "color_axis_shape_pc": col_s.tolist(),
-        "shape_axis_shape_pc": shp_s.tolist(),
-        "shape_axis_color_pc": shp_c.tolist(),
-    })
+    for i in range(len(sel_sc)):
+        rows.append((
+            i,
+            float(sel_sc[i]),
+            float(d_color_col[i]),
+            float(d_shape_shp[i]),
+            float(ratio[i]),
+        ))
+    _save_csv(
+        outdir / "panel_c_activity_data.csv",
+        ["neuron",
+         "selectivity_shape_minus_color",
+         "delta_r_color_under_color",
+         "delta_r_shape_under_shape",
+         "ratio_color_over_shape_activity"],
+        rows,
+    )
+
+
+def plot_panel_c_gopt(S: NDArray[np.float64],
+                      g_color: NDArray[np.float64], g_shape: NDArray[np.float64],
+                      outdir: Path, tag: Optional[str] = None,
+                      logratio: bool = False, show: bool = False) -> None:
+    """
+    Panel C (optimized-g, linear):
+      x = selectivity (shape - color)
+      y = g_color / g_shape
+    """
+    _ensure_dir(outdir)
+    eps = 1e-12
+    ratio = (g_color + eps) / (g_shape + eps)
+    sel_sc = S[:, 0] - S[:, 1]
+
+    fig = plt.figure(figsize=(5.8, 4.8))
+    plt.axhline(1.0, color='k', lw=1.0, ls='--', alpha=0.6)
+    sc = plt.scatter(sel_sc, ratio, c=sel_sc, cmap='bwr', alpha=0.85, edgecolors='none', s=24)
+    cb = plt.colorbar(sc); cb.set_label('Selectivity (shape - color)')
+    plt.xlabel('Selectivity (shape - color)')
+    plt.ylabel('Gain ratio (color / shape) from optimized g')
+    if tag:
+        plt.title(f"Optimized gains — {tag}")
+    plt.grid(True, linestyle=':')
+    plt.tight_layout()
+    for ext in ("png", "pdf", "svg"):
+        plt.savefig(outdir / f"panel_c_gopt.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+    if show:
+        plt.show()
+    plt.close(fig)
+
+    rows = []
+    for i in range(len(sel_sc)):
+        rows.append((
+            i,
+            float(sel_sc[i]),
+            float(g_color[i]),
+            float(g_shape[i]),
+            float(ratio[i]),
+        ))
+    _save_csv(
+        outdir / "panel_c_gopt_data.csv",
+        ["neuron",
+         "selectivity_shape_minus_color",
+         "g_color",
+         "g_shape",
+         "ratio_color_over_shape_gopt"],
+        rows,
+    )
+
 
 def plot_panel_c(S: NDArray[np.float64], g_color: NDArray[np.float64], g_shape: NDArray[np.float64],
-                 outdir: Path, *, mode: str = "ratio", logratio: bool = True, show: bool = False):
-    _ensure_dir(outdir)
-    sel = S[:,1] - S[:,0]
-    eps = 1e-12
-    if mode == "ratio":
-        y = (g_color + eps) / (g_shape + eps)
-        label = "gain ratio (color / shape)"
-        if logratio:
-            y = np.log2(y)
-            label = "log2 gain ratio (color / shape)"
-    else:
-        y = g_color - g_shape
-        label = "gain difference (color - shape)"
+                 outdir: Path, *, mode: str = "ratio", logratio: bool = False,
+                 show: bool = False, tag: str = "experiment"):
+    """
+    Backwards-compatible wrapper that now emits the optimized-g view.
+    """
+    plot_panel_c_gopt(S, g_color, g_shape, outdir, tag=tag,
+                      logratio=False, show=show)
 
-    fig = plt.figure(figsize=(5.6, 4.6))
-    plt.axhline(0.0, color='k', lw=1.0, ls='--', alpha=0.6)
-    sc = plt.scatter(sel, y, c=sel, cmap='bwr', alpha=0.8, edgecolors='none', s=22)
-    cb = plt.colorbar(sc); cb.set_label('Color - Shape selectivity')
-    plt.xlabel('Selectivity (color - shape)')
-    plt.ylabel(label)
-    plt.grid(True, linestyle=":")
-    plt.tight_layout()
-    for ext in ("png","pdf","svg"):
-        plt.savefig(outdir / f"panel_c.{ext}", dpi=300, bbox_inches="tight", transparent=True)
-    if show: plt.show()
-    plt.close(fig)
-
-    rows = []
-    for i in range(len(sel)):
-        ratio = float((g_color[i]+eps)/(g_shape[i]+eps))
-        l2 = float(np.log2(ratio))
-        rows.append((i, float(sel[i]), float(g_color[i]), float(g_shape[i]), ratio, l2))
-    _save_csv(outdir / "panel_c_data.csv",
-              ["neuron","selectivity","g_color","g_shape","ratio","log2_ratio"], rows)
-
-def plot_panel_d(rows: list[dict], outdir: Path, tag: str,
-                 ylabel: str = "Δ angle-to-target (deg)") -> None:
+def plot_panel_d_full(rows: list[dict], outdir: Path, tag: str,
+                      ylabel: str = "Δ angle-to-target (deg)") -> None:
     _ensure_dir(outdir)
     xs = [r["range"] for r in rows]
     yc = [r["impr_color_deg"] for r in rows]  # color-axis improvement
@@ -518,7 +768,7 @@ def plot_panel_d(rows: list[dict], outdir: Path, tag: str,
     plt.legend()
     plt.tight_layout()
     for ext in ("png","pdf","svg"):
-        plt.savefig(outdir / f"panel_d.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+        plt.savefig(outdir / f"panel_d_full.{ext}", dpi=300, bbox_inches="tight", transparent=True)
     plt.close(fig)
 
     # Save data
@@ -537,3 +787,37 @@ def plot_panel_d(rows: list[dict], outdir: Path, tag: str,
                "impr_color_shuf_mean_or_single","impr_shape_shuf_mean_or_single",
                "impr_color_shuf_sem","impr_shape_shuf_sem"],
               out_rows)
+
+
+def plot_panel_d_shape_only(rows: list[dict], outdir: Path, tag: str,
+                            ylabel: str = "Δ angle-to-target (deg)") -> None:
+    """
+    COLOR-ONLY panel D: keeps color-axis improvement + shuffled statistics.
+    """
+    _ensure_dir(outdir)
+    import numpy as np
+    xs = [r["range"] for r in rows]
+    yc = [r["impr_color_deg"] for r in rows]
+
+    fig = plt.figure(figsize=(6.2, 4.8))
+    plt.plot(xs, yc, marker="o", lw=2.0, label="Color-axis: (shape) - (color)")
+
+    has_mean = ("impr_color_deg_shuf_mean" in rows[0])
+    if has_mean:
+        yc_m = np.array([r["impr_color_deg_shuf_mean"] for r in rows])
+        yc_se = np.array([r.get("impr_color_deg_shuf_sem", 0.0) for r in rows])
+        plt.plot(xs, yc_m, marker="^", lw=1.6, ls="--", label="Color-axis (shuf mean)")
+        if np.isfinite(yc_se).all():
+            plt.fill_between(xs, yc_m - 1.96 * yc_se, yc_m + 1.96 * yc_se, alpha=0.15, linewidth=0)
+
+    plt.axhline(0.0, color='k', lw=1.0, ls='--', alpha=0.5)
+    plt.xlabel("Constraint range")
+    plt.ylabel(ylabel)
+    plt.title(f"Δ to-target (color-axis) — {tag}")
+    plt.ylim(0.0, 50.0)
+    plt.grid(True, linestyle=":")
+    plt.legend()
+    plt.tight_layout()
+    for ext in ("png","pdf","svg"):
+        plt.savefig(outdir / f"panel_d.{ext}", dpi=300, bbox_inches="tight", transparent=True)
+    plt.close(fig)

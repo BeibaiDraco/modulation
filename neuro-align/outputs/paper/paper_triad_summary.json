@@ -8,14 +8,14 @@
   },
   "to_target": {
     "color_axis": {
-      "under_color_deg": 34.7089537657691,
-      "under_shape_deg": 46.57302743171236,
-      "improvement_deg": 11.864073665943259
+      "under_color_deg": 47.44730312485959,
+      "under_shape_deg": 64.65044639893691,
+      "improvement_deg": 17.20314327407732
     },
     "shape_axis": {
-      "under_shape_deg": 59.31937427078332,
-      "under_color_deg": 81.71124373651607,
-      "improvement_deg": 22.391869465732746
+      "under_shape_deg": 26.457062129126598,
+      "under_color_deg": 40.89356638101265,
+      "improvement_deg": 14.43650425188605
     }
   },
   "unmod": {
@@ -24,7 +24,7 @@
   },
   "color_alignment": {
     "solver": "SLSQP",
-    "final_objective": -0.6757745350677797,
+    "final_objective": -0.4573384359466703,
     "success": true,
     "status": 0,
     "message": "Optimization terminated successfully",
@@ -32,84 +32,84 @@
     "func_evals": 1212,
     "grad_evals": 10,
     "angles_deg": {
-      "unmod_to_target": 60.17788300134249,
-      "opt_to_target": 34.7089537657691,
-      "delta_opt_vs_unmod": 27.96134463516641,
-      "improvement": 25.468929235573384
+      "unmod_to_target": 72.57683268955601,
+      "opt_to_target": 47.44730312485959,
+      "delta_opt_vs_unmod": 31.4635924667252,
+      "improvement": 25.129529564696426
     },
     "axis_norms": {
       "pre": 7.5540179560818945,
-      "post": 7.554017956084298,
-      "equality_residual": 3.630873379734112e-11
+      "post": 7.554017956085319,
+      "equality_residual": 5.1741722018050496e-11
     },
     "g_stats": {
-      "min": 0.7924191694534503,
-      "max": 1.0559285198532289,
-      "mean": 0.9813017639234628,
-      "std": 0.04637214646388943,
-      "l2_norm_g_minus_1": 0.5477225575098031,
-      "linf_norm_g_minus_1": 0.20758083054654974
+      "min": 0.8051260516144926,
+      "max": 1.132181190224215,
+      "mean": 0.9902663849754195,
+      "std": 0.04904341687315848,
+      "l2_norm_g_minus_1": 0.5477225575096732,
+      "linf_norm_g_minus_1": 0.19487394838550742
     },
     "constraint_residuals": {
       "ball": {
         "R_fraction": 0.05,
         "R_absolute": 0.5477225575051662,
-        "residual_l2": -4.636957484649429e-12,
-        "residual_sq": -5.079492382265016e-12
+        "residual_l2": -4.5070613907682855e-12,
+        "residual_sq": -4.937217301659302e-12
       }
     }
   },
   "shape_alignment": {
     "solver": "SLSQP",
-    "final_objective": -0.26035724039577035,
+    "final_objective": -0.8015056765837635,
     "success": true,
     "status": 0,
     "message": "Optimization terminated successfully",
-    "iterations": 10,
-    "func_evals": 1211,
-    "grad_evals": 10,
+    "iterations": 11,
+    "func_evals": 1332,
+    "grad_evals": 11,
     "angles_deg": {
-      "unmod_to_target": 85.87289887747066,
-      "opt_to_target": 59.31937427078332,
-      "delta_opt_vs_unmod": 28.440371589938962,
-      "improvement": 26.55352460668734
+      "unmod_to_target": 49.290984695039754,
+      "opt_to_target": 26.457062129126598,
+      "delta_opt_vs_unmod": 26.248281578873232,
+      "improvement": 22.833922565913156
     },
     "axis_norms": {
       "pre": 7.632282775796243,
-      "post": 7.632282775802893,
-      "equality_residual": 1.0150102980333031e-10
+      "post": 7.632282775805978,
+      "equality_residual": 1.4858869690215215e-10
     },
     "g_stats": {
-      "min": 0.8373790691245055,
-      "max": 1.1003409582536579,
-      "mean": 0.9885136081010378,
-      "std": 0.04866274551648819,
-      "l2_norm_g_minus_1": 0.5477225575116331,
-      "linf_norm_g_minus_1": 0.16262093087549445
+      "min": 0.846934735075145,
+      "max": 1.1029778916133615,
+      "mean": 0.9854516157341806,
+      "std": 0.047836644068398965,
+      "l2_norm_g_minus_1": 0.5477225575569407,
+      "linf_norm_g_minus_1": 0.15306526492485495
     },
     "constraint_residuals": {
       "ball": {
         "R_fraction": 0.05,
         "R_absolute": 0.5477225575051662,
-        "residual_l2": -6.466938096139074e-12,
-        "residual_sq": -7.084111075528199e-12
+        "residual_l2": -5.177447359727694e-11,
+        "residual_sq": -5.671602076873228e-11
       }
     }
   },
   "gain_comparison": {
     "ratio_color_over_shape": {
-      "min": 0.7924191834033546,
-      "max": 1.20018802532804,
-      "mean": 0.9957245712673616,
-      "median": 0.9910165231002397,
-      "std": 0.07674059581572268
+      "min": 0.8108326508516385,
+      "max": 1.2375919552524812,
+      "mean": 1.0077474018160397,
+      "median": 1.0061749910803928,
+      "std": 0.07686600307322723
     },
     "diff_color_minus_shape": {
-      "min": -0.20758081294261355,
-      "max": 0.1688366633454168,
-      "mean": -0.0072118441775750304,
-      "median": -0.009123249362799735,
-      "std": 0.07383493063873522
+      "min": -0.18783599890115588,
+      "max": 0.20122487967798341,
+      "mean": 0.0048147692412390366,
+      "median": 0.006151335653627965,
+      "std": 0.07378287521868131
     }
   },
   "cfg": {
@@ -126,8 +126,8 @@
     },
     "objective": {
       "target_type": "custom_pc",
-      "theta_deg": 45.0,
-      "phi_deg": 60.0,
+      "theta_deg": 166.0,
+      "phi_deg": 45.0,
       "axis_of_interest": "color",
       "shape_for_color_line": 0.3,
       "color_for_shape_line": 0.6,
@@ -172,47 +172,47 @@
     "tag": "paper"
   },
   "cross_attend": {
-    "color_axis_angle_deg": 18.275972714069805,
-    "shape_axis_angle_deg": 24.06481617454793,
+    "color_axis_angle_deg": 21.215301846416082,
+    "shape_axis_angle_deg": 19.134914252633582,
     "shuffle": {
       "mode": "independent",
       "num_bins": 8,
       "binning": "quantile",
       "seed": 2025,
       "cross_attend": {
-        "color_axis_angle_deg": 13.92276430697584,
-        "shape_axis_angle_deg": 8.434406426400509
+        "color_axis_angle_deg": 6.879249797855793,
+        "shape_axis_angle_deg": 7.748733637938982
       },
       "axis_norms": {
         "color_axis": {
-          "under_color_attend_shuf": 7.390607430535685,
-          "under_shape_attend_shuf": 7.6639876539452585
+          "under_color_attend_shuf": 7.244782653759479,
+          "under_shape_attend_shuf": 7.625005943743367
         },
         "shape_axis": {
-          "under_color_attend_shuf": 7.723367222248408,
-          "under_shape_attend_shuf": 7.462875800764545
+          "under_color_attend_shuf": 7.738077231229343,
+          "under_shape_attend_shuf": 7.492705275575367
         }
       },
       "to_target": {
         "color_axis": {
-          "under_color_deg": 48.116031022737936,
-          "under_shape_deg": 60.61557594103935,
-          "improvement_deg": 12.499544918301417
+          "under_color_deg": 68.98107428741702,
+          "under_shape_deg": 69.16311558461699,
+          "improvement_deg": 0.18204129719997297
         },
         "shape_axis": {
-          "under_shape_deg": 77.93560970357971,
-          "under_color_deg": 84.70639561053045,
-          "improvement_deg": 6.770785906950735
+          "under_shape_deg": 41.42473622654492,
+          "under_color_deg": 47.53760282947036,
+          "improvement_deg": 6.112866602925436
         }
       }
     },
     "color_axis_norms": {
-      "under_color_attend": 7.554017956084298,
-      "under_shape_attend": 8.33758831886859
+      "under_color_attend": 7.554017956085319,
+      "under_shape_attend": 8.059523764974779
     },
     "shape_axis_norms": {
-      "under_color_attend": 7.9515472877776725,
-      "under_shape_attend": 7.632282775802893
+      "under_color_attend": 8.286984096705869,
+      "under_shape_attend": 7.632282775805978
     }
   }
 }

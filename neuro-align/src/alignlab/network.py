@@ -32,6 +32,12 @@ class LinearRNN:
 
         self.I = np.eye(self.N)
         self._lu = lu_factor(self.I - self.W_R)  # pre-factor
+        self._wf_scales = np.ones(self.K, dtype=float)
+        if getattr(self.cfg, "baseline_equalize", False):
+            try:
+                self.equalize_feature_columns(target_norm=1.0)
+            except Exception as exc:
+                self._baseline_equalize_error = str(exc)
 
     # ---------- initialization ----------
     def _init_selectivity_matrix(self, N:int, K:int) -> NDArray[np.float64]:
@@ -111,6 +117,17 @@ class LinearRNN:
             W = W * (radius / rho)
         return W
 
+    def equalize_feature_columns(self, target_norm: float = 1.0) -> None:
+        """
+        Rescale W_F columns so baseline effective columns
+        M = (I - W_R)^(-1) W_F have comparable L2 norms.
+        """
+        M = lu_solve(self._lu, self.W_F)
+        norms = np.linalg.norm(M, axis=0) + 1e-12
+        scales = (target_norm / norms).astype(float)
+        self.W_F = self.W_F * scales[np.newaxis, :]
+        self._wf_scales = scales
+
     # ---------- core computations ----------
     def response(self, shape_val: float, color_val: float,
                  g: Optional[NDArray[np.float64]] = None) -> NDArray[np.float64]:
@@ -158,4 +175,3 @@ def angle_deg(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
     cosv = np.clip(cosv, -1.0, 1.0)
     theta = float(np.degrees(np.arccos(cosv)))
     return float(min(theta, 180.0 - theta))
-
