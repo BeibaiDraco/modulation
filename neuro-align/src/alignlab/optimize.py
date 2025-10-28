@@ -1,11 +1,12 @@
 from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 import json
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import minimize
+import copy
 
 from .config import ExperimentConfig, ConstraintType, AxisOfInterest
 from .network import LinearRNN, angle_deg
@@ -28,12 +29,106 @@ def _cos2(a: NDArray[np.float64], b: NDArray[np.float64]) -> float:
     c = float(np.dot(a, b) / (na * nb))
     return float(np.clip(c, -1.0, 1.0) ** 2)
 
+def _pc_angles(vec: NDArray[np.float64]) -> tuple[float, float]:
+    x, y, z = map(float, np.asarray(vec, dtype=float))
+    theta = float(np.degrees(np.arctan2(y, x)))  # [-180, 180]
+    rho_xy = float(np.hypot(x, y))
+    phi = float(np.degrees(np.arctan2(z, rho_xy)))  # [-90, 90]
+    theta = (theta + 360.0) % 360.0
+    return theta, phi
+
+def _unit(v: NDArray[np.float64]) -> NDArray[np.float64]:
+    norm = float(np.linalg.norm(v))
+    if norm < 1e-12:
+        return np.zeros_like(v)
+    return v / norm
+
+def _slerp(u: NDArray[np.float64], v: NDArray[np.float64], delta_deg: float) -> NDArray[np.float64]:
+    u = _unit(u)
+    v = _unit(v)
+    dot = float(np.clip(np.dot(u, v), -1.0, 1.0))
+    total = float(np.degrees(np.arccos(dot))) if -1.0 < dot < 1.0 else 0.0
+    if total < 1e-6 or delta_deg <= 0.0:
+        return u
+    t = min(1.0, delta_deg / total)
+    omega = np.arccos(dot)
+    sin_omega = float(np.sin(omega))
+    if sin_omega < 1e-9:
+        return _unit((1.0 - t) * u + t * v)
+    w = (np.sin((1.0 - t) * omega) / sin_omega) * u + (np.sin(t * omega) / sin_omega) * v
+    return _unit(w)
+
 def _axis_fn_for(net, cfg, choice: AxisOfInterest):
     if choice == AxisOfInterest.COLOR:
         return lambda g: net.color_axis(cfg.objective.shape_for_color_line, g)
     if choice == AxisOfInterest.SHAPE:
         return lambda g: net.shape_axis(cfg.objective.color_for_shape_line, g)
     raise ValueError(f"AxisOfInterest {choice} not supported for triad mode")
+
+def baseline_axis_pc_angles(
+    cfg: ExperimentConfig,
+    *,
+    delta_deg: Optional[float] = None,
+    direction: str = "color_to_shape",
+) -> Dict[str, Dict[str, float]]:
+    """
+    Compute unmodulated color/shape axes in PC space and optionally propose a nearby target.
+
+    Args:
+        cfg: Experiment configuration.
+        delta_deg: If provided, take a spherical-linear step of this many degrees from the source axis
+                   toward the destination axis when suggesting a target.
+        direction: "color_to_shape", "shape_to_color", or "midpoint".
+    """
+    net = LinearRNN(cfg.network)
+    X0 = net.grid_responses(cfg.grid, g=None)
+    pca, _ = net.pca3(X0)
+
+    d_color = net.color_axis(cfg.objective.shape_for_color_line, g=None)
+    d_shape = net.shape_axis(cfg.objective.color_for_shape_line, g=None)
+
+    comps = pca.components_[:3, :]
+    v_color_pc = _unit(comps @ d_color)
+    v_shape_pc = _unit(comps @ d_shape)
+
+    theta_c, phi_c = _pc_angles(v_color_pc)
+    theta_s, phi_s = _pc_angles(v_shape_pc)
+
+    result: Dict[str, Dict[str, float]] = {
+        "color": {
+            "theta_deg": theta_c,
+            "phi_deg": phi_c,
+            "vector_pc1_pc2_pc3": v_color_pc.tolist(),
+        },
+        "shape": {
+            "theta_deg": theta_s,
+            "phi_deg": phi_s,
+            "vector_pc1_pc2_pc3": v_shape_pc.tolist(),
+        },
+        "geodesic_angle_deg": float(np.degrees(np.arccos(np.clip(np.dot(v_color_pc, v_shape_pc), -1.0, 1.0)))),
+    }
+
+    step = float(delta_deg) if delta_deg is not None else None
+    if step is not None:
+        direction = direction.lower()
+        if direction == "color_to_shape":
+            target_vec = _slerp(v_color_pc, v_shape_pc, step)
+        elif direction == "shape_to_color":
+            target_vec = _slerp(v_shape_pc, v_color_pc, step)
+        elif direction == "midpoint":
+            target_vec = _unit(v_color_pc + v_shape_pc)
+        else:
+            raise ValueError("direction must be 'color_to_shape', 'shape_to_color', or 'midpoint'")
+        theta_t, phi_t = _pc_angles(target_vec)
+        result["suggested_target"] = {
+            "theta_deg": theta_t,
+            "phi_deg": phi_t,
+            "vector_pc1_pc2_pc3": target_vec.tolist(),
+            "delta_deg": step,
+            "direction": direction,
+        }
+
+    return result
 
 def optimize_once(cfg: ExperimentConfig) -> Dict:
     # ---- model & PCA (fit on UNMOD only) ----
@@ -45,11 +140,49 @@ def optimize_once(cfg: ExperimentConfig) -> Dict:
     # ---- axis at g=1 (unmod) ----
     g0 = np.ones(cfg.network.N)
     d0 = axis_of_interest_vec(net, cfg.objective, g=g0)
+    d0_abs = np.abs(d0)
+    opt_cfg = cfg.optimization
+    perc = float(getattr(opt_cfg, "activity_floor_baseline_percentile", 10.0))
+    floor_val = float(np.percentile(d0_abs, perc)) if d0_abs.size else 0.0
+    denom_modesty = np.maximum(d0_abs, floor_val)
+    denom_modesty = np.where(denom_modesty > 0.0, denom_modesty, 1.0)
+    delta = float(getattr(opt_cfg, "activity_huber_delta", 0.25))
+    lam_modesty = float(getattr(opt_cfg, "lambda_activity_modesty", 0.0))
+    lam_cond = float(getattr(opt_cfg, "lambda_resolvent", 0.0))
 
     # ---- objective (maximize cos^2 -> minimize negative) ----
     def obj(g):
-        d = axis_of_interest_vec(net, cfg.objective, g=g)
-        return -_cos2(d, target)
+        g_arr = np.asarray(g, dtype=float)
+        d = axis_of_interest_vec(net, cfg.objective, g=g_arr)
+        na = float(np.linalg.norm(d))
+        nb = float(np.linalg.norm(target))
+        if na < 1e-15 or nb < 1e-15:
+            return 0.0
+        c = float(np.dot(d, target) / (na * nb))
+        align_term = -(np.clip(c, -1.0, 1.0) ** 2)
+
+        loss = align_term
+
+        if lam_modesty > 0.0:
+            g_eff = np.abs(d) / denom_modesty
+            x = g_eff - 1.0
+            huber = np.where(
+                np.abs(x) <= delta,
+                0.5 * x**2,
+                delta * (np.abs(x) - 0.5 * delta),
+            )
+            loss_modest = float(np.mean(huber))
+            loss += lam_modesty * loss_modest
+
+        if lam_cond > 0.0:
+            G_rows = g_arr[:, None]
+            M = net.I - (G_rows * net.W_R)
+            smin = float(np.linalg.svd(M, compute_uv=False)[-1])
+            inv_smin = 1.0 / max(smin, 1e-6)
+            loss_cond = float(inv_smin**2)
+            loss += lam_cond * loss_cond
+
+        return loss
 
     bounds, constraints = build_bounds_and_constraints(
         axis_fn=lambda g: axis_of_interest_vec(net, cfg.objective, g=g),
@@ -57,11 +190,52 @@ def optimize_once(cfg: ExperimentConfig) -> Dict:
         positive_gains=cfg.constraints.positive_gains
     )
 
+    # --- NEW: hard stability margin, freeze risky, hard modesty cap ---
+    # 1) Hard stability: σ_min(I - diag(g) W_R) >= smin_floor
+    tau = float(getattr(cfg.optimization, "smin_floor", 0.0))
+    if tau > 0.0:
+        def _ineq_smin(g, W=net.W_R, I=net.I, t=tau):
+            M = I - (np.asarray(g, dtype=float)[:, None] * W)
+            smin = float(np.linalg.svd(M, compute_uv=False)[-1])
+            return smin - t  # >= 0 when feasible
+        constraints.append({"type": "ineq", "fun": _ineq_smin})
+
+    # 2) Freeze top-q risky neurons at g_i = 1 (by equality constraints)
+    #    Risk = ||H0[:,i]|| * (1 / denom_modesty_i), where H0 = (I - W_R)^{-1}, g = 1 baseline
+    q = float(getattr(cfg.optimization, "freeze_topq_risky", 0.0))
+    protected_idx = np.array([], dtype=int)
+    if q > 0.0:
+        H0 = np.linalg.inv(net.I - net.W_R)           # N x N
+        colnorm = np.linalg.norm(H0, axis=0)          # (N,)
+        small_base = 1.0 / denom_modesty              # bigger when baseline tiny
+        risk = colnorm * small_base
+        cutoff = np.quantile(risk, 1.0 - q)
+        protected_idx = np.flatnonzero(risk >= cutoff)
+        for i in protected_idx.tolist():
+            constraints.append({"type": "eq", "fun": (lambda g, i=i: float(np.asarray(g, dtype=float)[i] - 1.0))})
+
+    # 3) Hard cap on activity-derived gain g_eff = |d(g)| / denom_modesty
+    #    Applies to protected set if non-empty; otherwise global (all neurons).
+    eps_cap = float(getattr(cfg.optimization, "protect_activity_eps", 0.0))
+    qtile = float(getattr(cfg.optimization, "protect_activity_quantile", 1.0))
+    if eps_cap > 0.0:
+        def _ineq_modesty(g, idx=protected_idx, qtile=qtile, eps_cap=eps_cap):
+            g_arr = np.asarray(g, dtype=float)
+            d = axis_of_interest_vec(net, cfg.objective, g=g_arr)   # N,
+            g_eff = np.abs(d) / denom_modesty
+            vals = g_eff[idx] if idx.size else g_eff
+            if vals.size == 0:
+                return 1.0  # nothing to constrain
+            k = max(0, min(vals.size - 1, int(np.ceil(qtile * vals.size) - 1)))
+            thresh = float(np.partition(vals, k)[k])  # q-quantile (1.0 = max)
+            return (1.0 + eps_cap) - thresh  # >= 0 when feasible
+        constraints.append({"type": "ineq", "fun": _ineq_modesty})
+
     # ---- optimize ----
     res = minimize(
         obj, x0=g0, method="SLSQP",
         bounds=bounds, constraints=constraints,
-        options={"maxiter": 500, "ftol": 1e-9, "disp": False}
+        options={"maxiter": 500, "ftol": 1e-9, "disp": False, "eps": 1e-4}
     )
 
     g_opt = res.x
@@ -193,25 +367,94 @@ def _optimize_axis_with_shared_pca(net, pca, target, cfg, axis_choice: AxisOfInt
 
     axis_fn = _axis_fn_for(net, cfg, axis_choice)
     d0 = axis_fn(g0)
+    d0_abs = np.abs(d0)
+    opt_cfg = cfg.optimization
+    perc = float(getattr(opt_cfg, "activity_floor_baseline_percentile", 10.0))
+    floor_val = float(np.percentile(d0_abs, perc)) if d0_abs.size else 0.0
+    denom_modesty = np.maximum(d0_abs, floor_val)
+    denom_modesty = np.where(denom_modesty > 0.0, denom_modesty, 1.0)
+    delta = float(getattr(opt_cfg, "activity_huber_delta", 0.25))
+    lam_modesty = float(getattr(opt_cfg, "lambda_activity_modesty", 0.0))
+    lam_cond = float(getattr(opt_cfg, "lambda_resolvent", 0.0))
 
     # objective: maximize cos^2(d(g), target) -> minimize negative
     def obj(g):
-        d = axis_fn(g)
+        g_arr = np.asarray(g, dtype=float)
+        d = axis_fn(g_arr)
         na = float(np.linalg.norm(d)); nb = float(np.linalg.norm(target))
         if na < 1e-15 or nb < 1e-15:
             return 0.0
         c = float(np.dot(d, target) / (na * nb))
-        return -(np.clip(c, -1.0, 1.0) ** 2)
+        align_term = -(np.clip(c, -1.0, 1.0) ** 2)
+
+        loss = align_term
+
+        if lam_modesty > 0.0:
+            g_eff = np.abs(d) / denom_modesty
+            x = g_eff - 1.0
+            huber = np.where(
+                np.abs(x) <= delta,
+                0.5 * x**2,
+                delta * (np.abs(x) - 0.5 * delta),
+            )
+            loss_modest = float(np.mean(huber))
+            loss += lam_modesty * loss_modest
+
+        if lam_cond > 0.0:
+            G_rows = g_arr[:, None]
+            M = net.I - (G_rows * net.W_R)
+            smin = float(np.linalg.svd(M, compute_uv=False)[-1])
+            inv_smin = 1.0 / max(smin, 1e-6)
+            loss_cond = float(inv_smin**2)
+            loss += lam_cond * loss_cond
+
+        return loss
 
     bounds, constraints = build_bounds_and_constraints(
         axis_fn=axis_fn, g0=g0, cfg=cfg.constraints,
         positive_gains=cfg.constraints.positive_gains
     )
 
+    # --- NEW: hard stability margin, freeze risky, hard modesty cap ---
+    tau = float(getattr(cfg.optimization, "smin_floor", 0.0))
+    if tau > 0.0:
+        def _ineq_smin(g, W=net.W_R, I=net.I, t=tau):
+            M = I - (np.asarray(g, dtype=float)[:, None] * W)
+            smin = float(np.linalg.svd(M, compute_uv=False)[-1])
+            return smin - t
+        constraints.append({"type": "ineq", "fun": _ineq_smin})
+
+    q = float(getattr(cfg.optimization, "freeze_topq_risky", 0.0))
+    protected_idx = np.array([], dtype=int)
+    if q > 0.0:
+        H0 = np.linalg.inv(net.I - net.W_R)
+        colnorm = np.linalg.norm(H0, axis=0)
+        small_base = 1.0 / denom_modesty
+        risk = colnorm * small_base
+        cutoff = np.quantile(risk, 1.0 - q)
+        protected_idx = np.flatnonzero(risk >= cutoff)
+        for i in protected_idx.tolist():
+            constraints.append({"type": "eq", "fun": (lambda g, i=i: float(np.asarray(g, dtype=float)[i] - 1.0))})
+
+    eps_cap = float(getattr(cfg.optimization, "protect_activity_eps", 0.0))
+    qtile = float(getattr(cfg.optimization, "protect_activity_quantile", 1.0))
+    if eps_cap > 0.0:
+        def _ineq_modesty(g, idx=protected_idx, qtile=qtile, eps_cap=eps_cap):
+            g_arr = np.asarray(g, dtype=float)
+            d = axis_fn(g_arr)                         # N,
+            g_eff = np.abs(d) / denom_modesty
+            vals = g_eff[idx] if idx.size else g_eff
+            if vals.size == 0:
+                return 1.0
+            k = max(0, min(vals.size - 1, int(np.ceil(qtile * vals.size) - 1)))
+            thresh = float(np.partition(vals, k)[k])
+            return (1.0 + eps_cap) - thresh
+        constraints.append({"type": "ineq", "fun": _ineq_modesty})
+
     res = minimize(
         obj, x0=g0, method="SLSQP",
         bounds=bounds, constraints=constraints,
-        options={"maxiter": 500, "ftol": 1e-9, "disp": False}
+        options={"maxiter": 500, "ftol": 1e-9, "disp": False, "eps": 1e-4}
     )
 
     g_opt = res.x
@@ -412,19 +655,10 @@ def optimize_triad(cfg):
             "std": float(np.std(x)),
         }
 
-    wf_scales = np.array(getattr(net, "_wf_scales", np.ones(net.K, dtype=float)), dtype=float)
-    baseline_equalization = {
-        "enabled": bool(getattr(cfg.network, "baseline_equalize", False)),
-        "wf_scales": wf_scales.tolist(),
-    }
-    if hasattr(net, "_baseline_equalize_error"):
-        baseline_equalization["error"] = getattr(net, "_baseline_equalize_error")
-
     summary = {
         "pca": {
             "explained_variance_ratio": [float(x) for x in pca.explained_variance_ratio_.tolist()],
         },
-        "baseline_equalization": baseline_equalization,
         "to_target": to_target,
         "unmod": {
             "color_axis_norm": float(np.linalg.norm(d_color0)),
@@ -475,8 +709,8 @@ def sweep_range_vs_degree(cfg: ExperimentConfig, ranges: List[float]) -> Dict:
     # unchanged...
     table = []
     for r in ranges:
-        local = cfg
-        if cfg.constraints.type == ConstraintType.BALL:
+        local = copy.deepcopy(cfg)
+        if local.constraints.type == ConstraintType.BALL:
             local.constraints.radius = r
         else:
             local.constraints.box_half_width = r
@@ -519,8 +753,8 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
     rows = []
     for r in ranges:
         # (1) set constraint magnitude on a local copy (shallow is OK for these scalars)
-        local = cfg
-        if cfg.constraints.type == ConstraintType.BALL:
+        local = copy.deepcopy(cfg)
+        if local.constraints.type == ConstraintType.BALL:
             local.constraints.radius = r
         else:
             local.constraints.box_half_width = r
@@ -530,10 +764,10 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
          dcol0, dcol1, dshp0, dshp1, target, gcol, gshp) = optimize_triad(local)
 
         # (3) build axes under each attention state
-        col_axis_color = net.color_axis(cfg.objective.shape_for_color_line, g=gcol)  # color gains
-        col_axis_shape = net.color_axis(cfg.objective.shape_for_color_line, g=gshp)  # shape gains
-        shp_axis_shape = net.shape_axis(cfg.objective.color_for_shape_line, g=gshp)  # shape gains
-        shp_axis_color = net.shape_axis(cfg.objective.color_for_shape_line, g=gcol)  # color gains
+        col_axis_color = net.color_axis(local.objective.shape_for_color_line, g=gcol)  # color gains
+        col_axis_shape = net.color_axis(local.objective.shape_for_color_line, g=gshp)  # shape gains
+        shp_axis_shape = net.shape_axis(local.objective.color_for_shape_line, g=gshp)  # shape gains
+        shp_axis_color = net.shape_axis(local.objective.color_for_shape_line, g=gcol)  # color gains
 
         # (4) undirectional angles to target
         a_cc = undir_angle(col_axis_color, target)  # color axis under color
@@ -577,29 +811,29 @@ def triad_sweep(cfg: ExperimentConfig, ranges: list[float]) -> dict:
                     row["impr_shape_deg_shuf"] = float(sax["improvement_deg"])
 
         # (7) repeated shuffles for mean ± SEM (panel_d)
-        if cfg.shuffle.enabled and int(cfg.shuffle.repeats) > 1:
-            repeats   = int(cfg.shuffle.repeats)
-            base_seed = cfg.shuffle.seed if cfg.shuffle.seed is not None else (cfg.network.seed + 101)
+        if local.shuffle.enabled and int(local.shuffle.repeats) > 1:
+            repeats   = int(local.shuffle.repeats)
+            base_seed = local.shuffle.seed if local.shuffle.seed is not None else (local.network.seed + 101)
 
             sel  = net.S[:, 1] - net.S[:, 0]
-            bins = assign_bins(sel, cfg.shuffle.num_bins, cfg.shuffle.binning)
+            bins = assign_bins(sel, local.shuffle.num_bins, local.shuffle.binning)
 
             col_cross_list, shp_cross_list = [], []
             impr_color_list, impr_shape_list = [], []
 
             for i in range(repeats):
                 rng = np.random.default_rng(base_seed + 10007 * i)
-                if cfg.shuffle.mode == "paired":
+                if local.shuffle.mode == "paired":
                     g_color_shuf, g_shape_shuf = shuffle_pair_within_bins(gcol, gshp, bins, rng)
                 else:
                     g_color_shuf = shuffle_within_bins(gcol, bins, rng)
                     g_shape_shuf = shuffle_within_bins(gshp, bins, rng)
 
                 # axes under shuffled gains
-                col_axis_color_sh = net.color_axis(cfg.objective.shape_for_color_line, g=g_color_shuf)
-                col_axis_shape_sh = net.color_axis(cfg.objective.shape_for_color_line, g=g_shape_shuf)
-                shp_axis_color_sh = net.shape_axis(cfg.objective.color_for_shape_line, g=g_color_shuf)
-                shp_axis_shape_sh = net.shape_axis(cfg.objective.color_for_shape_line, g=g_shape_shuf)
+                col_axis_color_sh = net.color_axis(local.objective.shape_for_color_line, g=g_color_shuf)
+                col_axis_shape_sh = net.color_axis(local.objective.shape_for_color_line, g=g_shape_shuf)
+                shp_axis_color_sh = net.shape_axis(local.objective.color_for_shape_line, g=g_color_shuf)
+                shp_axis_shape_sh = net.shape_axis(local.objective.color_for_shape_line, g=g_shape_shuf)
 
                 # cross-attend (undirectional)
                 col_cross_list.append(undir_angle(col_axis_color_sh, col_axis_shape_sh))

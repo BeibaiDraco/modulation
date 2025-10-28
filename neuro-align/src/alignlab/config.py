@@ -22,6 +22,15 @@ class WRNormalization(str, Enum):
     ROW = "row"              # small PC1 regime (row-sum zero)
     ROW_AND_COL = "row_and_col"
 
+class GainMode(str, Enum):
+    FEEDFORWARD = "feedforward"
+    RECURRENT = "recurrent"
+    BOTH = "both"
+
+class OptimizationMode(str, Enum):
+    STANDARD = "standard"
+    EFFECTIVE_MOD = "effective_mod"
+
 @dataclass
 class NetworkConfig:
     N: int = 120
@@ -34,6 +43,11 @@ class NetworkConfig:
     wr_tuned: bool = False
     weight_scale: float = 0.1
     baseline_equalize: bool = False
+    gain_mode: GainMode = GainMode.BOTH
+
+    def __post_init__(self):
+        if isinstance(self.gain_mode, str):
+            self.gain_mode = GainMode(self.gain_mode.lower())
 
 @dataclass
 class ObjectiveConfig:
@@ -69,6 +83,23 @@ class ShuffleConfig:
     repeats: int = 1               # (N repeats for panel_d)
 
 @dataclass
+class OptimizationConfig:
+    mode: OptimizationMode = OptimizationMode.STANDARD
+    # Only used when mode == EFFECTIVE_MOD
+    activity_floor_frac: float = 0.0
+    activity_floor_axes: str = "shape"              # "shape" | "color" | "both"
+    activity_floor_baseline_percentile: float = 10.0
+    activity_huber_delta: float = 0.25
+    lambda_activity_modesty: float = 0.0
+    lambda_resolvent: float = 0.0
+    
+    # --- NEW: hard constraints & protection ---
+    smin_floor: float = 0.0             # hard lower bound on σ_min(I - diag(g) W_R); 0 = off
+    freeze_topq_risky: float = 0.0      # fraction in [0,1]; e.g., 0.05 freezes top-5% "risky" neurons at g_i=1
+    protect_activity_eps: float = 0.0   # hard cap on activity-derived gain: g_eff <= 1 + eps; 0 = off
+    protect_activity_quantile: float = 1.0  # 1.0 = cap the max; 0.98 = cap 98th percentile (smoother)
+
+@dataclass
 class ExperimentConfig:
     network: NetworkConfig = field(default_factory=NetworkConfig)
     objective: ObjectiveConfig = field(default_factory=ObjectiveConfig)
@@ -76,7 +107,8 @@ class ExperimentConfig:
     grid: GridConfig = field(default_factory=GridConfig)
     save_dir: str = "outputs"
     tag: str = "default_smallpc1_custom"
-    shuffle: ShuffleConfig = field(default_factory=ShuffleConfig)  
+    shuffle: ShuffleConfig = field(default_factory=ShuffleConfig)
+    optimization: OptimizationConfig = field(default_factory=OptimizationConfig)
 
 @dataclass
 class SweepConfig:
@@ -92,4 +124,5 @@ class ExperimentConfig:
     save_dir: str = "outputs"
     tag: str = "default_smallpc1_custom"
     shuffle: ShuffleConfig = field(default_factory=ShuffleConfig)
+    optimization: OptimizationConfig = field(default_factory=OptimizationConfig)
     sweep: SweepConfig = field(default_factory=SweepConfig)   # <-- NEW

@@ -2,20 +2,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import yaml
-from .config import ExperimentConfig, NetworkConfig, ObjectiveConfig, ConstraintConfig, GridConfig, ConstraintType
-from .optimize import optimize_once, sweep_range_vs_degree, save_json
-from .plotting import (
-    plot_original_two_panel, plot_embedding_3d,
-    plot_range_vs_degree, plot_gains_vs_selectivity
+from .config import (
+    ExperimentConfig, NetworkConfig, ObjectiveConfig, ConstraintConfig,
+    GridConfig, ConstraintType, OptimizationMode
 )
-from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_triad
-from .plotting import (
-    plot_original_two_panel, plot_embedding_3d,
-    plot_range_vs_degree, plot_gains_vs_selectivity,  # existing
-    plot_triad_three_panel
-)
-
-from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_triad, triad_sweep
+from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_triad, triad_sweep, baseline_axis_pc_angles
 from .plotting import (
     plot_original_two_panel, plot_embedding_3d,
     plot_range_vs_degree, plot_gains_vs_selectivity,
@@ -33,7 +24,8 @@ def load_config(path: Path) -> ExperimentConfig:
     import yaml
     from .config import (
         ExperimentConfig, NetworkConfig, ObjectiveConfig, ConstraintConfig, GridConfig,
-        TargetType, AxisOfInterest, ConstraintType, WRNormalization, ShuffleConfig, SweepConfig
+        TargetType, AxisOfInterest, ConstraintType, WRNormalization,
+        ShuffleConfig, SweepConfig, OptimizationConfig, OptimizationMode
     )
 
     def _enum(enum_cls, v, *, tolower=True):
@@ -86,17 +78,101 @@ def load_config(path: Path) -> ExperimentConfig:
     sweraw = dict(raw.get("sweep", {}))
     swe = SweepConfig(**sweraw)
 
+    # --- Optimization ---
+    orz = dict(raw.get("optimization", {}))
+    if "mode" in orz:
+        orz["mode"] = _enum(OptimizationMode, orz["mode"])
+    optim = OptimizationConfig(**orz)
+
     tag = raw.get("tag", "experiment")
     save_dir = raw.get("save_dir", "outputs")
-    return ExperimentConfig(network=net, objective=obj, constraints=con, grid=grd,
-                            tag=tag, save_dir=save_dir, shuffle=shuf, sweep=swe) 
+    return ExperimentConfig(
+        network=net,
+        objective=obj,
+        constraints=con,
+        grid=grd,
+        tag=tag,
+        save_dir=save_dir,
+        shuffle=shuf,
+        optimization=optim,
+        sweep=swe,
+    ) 
+
+def _angdiff(a: float, b: float) -> float:
+    """Shortest angular difference in degrees on [0, 360)."""
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def _preview_axes_and_confirm(cfg: ExperimentConfig, *, auto_yes: bool = False) -> bool:
+    """
+    Print unmodulated color/shape axes in PC space alongside current custom_pc target.
+    Returns True if the user confirms (or auto_yes), False otherwise.
+    """
+    info = baseline_axis_pc_angles(cfg)
+    color = info.get("color", {})
+    shape = info.get("shape", {})
+    target_theta = float(cfg.objective.theta_deg)
+    target_phi = float(cfg.objective.phi_deg)
+
+    print("\n=== Triad Sweep: Target Preview ===")
+    print(
+        f"COLOR axis (unmodulated) in PC space:  θ={color.get('theta_deg', float('nan')):.2f}°, "
+        f"φ={color.get('phi_deg', float('nan')):.2f}°"
+    )
+    print(
+        f"SHAPE axis (unmodulated) in PC space:  θ={shape.get('theta_deg', float('nan')):.2f}°, "
+        f"φ={shape.get('phi_deg', float('nan')):.2f}°"
+    )
+    print(
+        f"Current YAML target (custom_pc):       θ={target_theta:.2f}°, φ={target_phi:.2f}°"
+    )
+    print(
+        f"Δθ to COLOR: {_angdiff(target_theta, color.get('theta_deg', target_theta)):.2f}°,   "
+        f"Δθ to SHAPE: {_angdiff(target_theta, shape.get('theta_deg', target_theta)):.2f}°\n"
+    )
+
+    if auto_yes:
+        print("--yes provided; proceeding without prompt.\n")
+        return True
+
+    ans = input("Proceed with this target? [y/N]: ").strip().lower()
+    if ans in ("y", "yes"):
+        print("OK — running sweep...\n")
+        return True
+
+    print("Aborted by user. Edit your YAML target and re-run.\n")
+    return False
+
+
+def _apply_optimization_overrides(cfg, args) -> None:
+    if getattr(args, "optim_mode", None):
+        cfg.optimization.mode = OptimizationMode(args.optim_mode)
+    if getattr(args, "eff_floor_frac", None) is not None:
+        cfg.optimization.activity_floor_frac = float(args.eff_floor_frac)
+    if getattr(args, "eff_floor_axes", None):
+        cfg.optimization.activity_floor_axes = args.eff_floor_axes
+    if getattr(args, "eff_floor_baseline_pct", None) is not None:
+        cfg.optimization.activity_floor_baseline_percentile = float(args.eff_floor_baseline_pct)
 
 def cmd_run(args):
     cfg = load_config(Path(args.config))
+    _apply_optimization_overrides(cfg, args)
     out, net, pca, Z0, Zopt, d0, dopt, target, gopt = optimize_once(cfg)
     outdir = Path(cfg.save_dir) / cfg.tag
     outdir.mkdir(parents=True, exist_ok=True)
     save_json(out, outdir / f"{cfg.tag}_summary.json")
+
+    if getattr(args, "print_eff_diagnostics", False):
+        diag = out.get("optimization", {}).get("activity_floor", {}).get("diagnostics")
+        if diag:
+            print(
+                "[effective_mod] axis margin stats: "
+                f"min={diag['min_margin']:.3f}, "
+                f"p5={diag['p5_margin']:.3f}, "
+                f"median={diag['median_margin']:.3f}"
+            )
+        else:
+            print("[effective_mod] diagnostics unavailable (floor inactive or disabled).")
 
     if args.style == "original":
         plot_original_two_panel(
@@ -136,6 +212,7 @@ def cmd_sweep(args):
 
 def cmd_triad(args):
     cfg = load_config(Path(args.config))
+    _apply_optimization_overrides(cfg, args)
     (summary, net, pca, Z0, Zc, Zs,
      dcol0, dcol1, dshp0, dshp1, target, gcol, gshp) = optimize_triad(cfg)
 
@@ -184,10 +261,86 @@ def cmd_triad(args):
         )
         plot_panel_c_activity(net, cfg, gcol, gshp, outdir, cfg.tag, show=False)
         plot_panel_c_gopt(net.S, gcol, gshp, outdir, cfg.tag, show=False)
-    
+        
+        # Print Panel D metric: improvement to target
+        to_target = summary.get("to_target", {})
+        color_ax = to_target.get("color_axis", {})
+        shape_ax = to_target.get("shape_axis", {})
+        print("\n=== Panel D Metric: Δ angle-to-target (improvement) ===")
+        print("(Positive = 'own' attention helps axis align better to target)")
+        print(f"\nColor axis:")
+        print(f"  Angle to target under color gains (own):   {color_ax.get('under_color_deg', float('nan')):.4f}°")
+        print(f"  Angle to target under shape gains (other): {color_ax.get('under_shape_deg', float('nan')):.4f}°")
+        print(f"  → Improvement (other - own):               {color_ax.get('improvement_deg', float('nan')):.4f}°")
+        print(f"\nShape axis:")
+        print(f"  Angle to target under shape gains (own):   {shape_ax.get('under_shape_deg', float('nan')):.4f}°")
+        print(f"  Angle to target under color gains (other): {shape_ax.get('under_color_deg', float('nan')):.4f}°")
+        print(f"  → Improvement (other - own):               {shape_ax.get('improvement_deg', float('nan')):.4f}°")
+        
+        # Compute and print optimized axes in PC space (theta, phi)
+        def _pc_angles(vec):
+            """Convert PC vector to spherical coordinates (theta, phi in degrees)."""
+            import numpy as np
+            x, y, z = float(vec[0]), float(vec[1]), float(vec[2])
+            theta = float(np.degrees(np.arctan2(y, x)))  # [-180, 180]
+            rho_xy = float(np.hypot(x, y))
+            phi = float(np.degrees(np.arctan2(z, rho_xy)))  # [-90, 90]
+            theta = (theta + 360.0) % 360.0  # [0, 360)
+            return theta, phi
+        
+        comps = pca.components_[:3, :]  # 3 x N
+        col_c_pc = comps @ d_col_c
+        col_s_pc = comps @ d_col_s
+        shp_c_pc = comps @ d_shp_c
+        shp_s_pc = comps @ d_shp_s
+        
+        theta_col_c, phi_col_c = _pc_angles(col_c_pc)
+        theta_col_s, phi_col_s = _pc_angles(col_s_pc)
+        theta_shp_c, phi_shp_c = _pc_angles(shp_c_pc)
+        theta_shp_s, phi_shp_s = _pc_angles(shp_s_pc)
+        
+        print("\n=== Optimized Axes in PC Space (θ, φ) ===")
+        print(f"\nColor axis under color gains (own):")
+        print(f"  θ = {theta_col_c:.2f}°,  φ = {phi_col_c:.2f}°")
+        print(f"\nColor axis under shape gains (other):")
+        print(f"  θ = {theta_col_s:.2f}°,  φ = {phi_col_s:.2f}°")
+        print(f"\nShape axis under shape gains (own):")
+        print(f"  θ = {theta_shp_s:.2f}°,  φ = {phi_shp_s:.2f}°")
+        print(f"\nShape axis under color gains (other):")
+        print(f"  θ = {theta_shp_c:.2f}°,  φ = {phi_shp_c:.2f}°")
+        
+        # Also print target for reference
+        target_pc = comps @ target
+        theta_tgt, phi_tgt = _pc_angles(target_pc)
+        print(f"\nTarget (for reference):")
+        print(f"  θ = {theta_tgt:.2f}°,  φ = {phi_tgt:.2f}°")
+        print()
+    if getattr(args, "print_eff_diagnostics", False):
+        axes_outputs = [
+            ("color", summary.get("color_alignment")),
+            ("shape", summary.get("shape_alignment")),
+        ]
+        for name, out_axis in axes_outputs:
+            if not out_axis:
+                continue
+            diag = out_axis.get("optimization", {}).get("activity_floor", {}).get("diagnostics")
+            if diag:
+                print(
+                    f"[effective_mod] {name} axis margin stats: "
+                    f"min={diag['min_margin']:.3f}, "
+                    f"p5={diag['p5_margin']:.3f}, "
+                    f"median={diag['median_margin']:.3f}"
+                )
+            else:
+                print(f"[effective_mod] {name} axis diagnostics unavailable (floor inactive or disabled).")
+
     
 def cmd_triad_sweep(args):
     cfg = load_config(Path(args.config))
+    _apply_optimization_overrides(cfg, args)
+    if not _preview_axes_and_confirm(cfg, auto_yes=getattr(args, "yes", False)):
+        return
+
     ranges = _resolve_ranges(cfg, getattr(args, "ranges", None), getattr(args,"preset",None))
     
     # optional CLI overrides
@@ -201,6 +354,32 @@ def cmd_triad_sweep(args):
         cfg.shuffle.seed = int(args.shuffle_seed)
 
     res = triad_sweep(cfg, ranges)
+    if getattr(args, "print_eff_diagnostics", False):
+        for row in res.get("rows", []):
+            rng = row.get("range")
+            color_diag = row.get("color_eff_diag")
+            shape_diag = row.get("shape_eff_diag")
+            parts = []
+            if color_diag:
+                parts.append(
+                    "color"
+                    + f" min={color_diag['min_margin']:.3f}"
+                    + f" p5={color_diag['p5_margin']:.3f}"
+                    + f" median={color_diag['median_margin']:.3f}"
+                )
+            else:
+                parts.append("color=NA")
+            if shape_diag:
+                parts.append(
+                    "shape"
+                    + f" min={shape_diag['min_margin']:.3f}"
+                    + f" p5={shape_diag['p5_margin']:.3f}"
+                    + f" median={shape_diag['median_margin']:.3f}"
+                )
+            else:
+                parts.append("shape=NA")
+            print(f"[effective_mod] range={rng}: " + ", ".join(parts))
+
     outdir = Path(cfg.save_dir) / (cfg.tag + "_triad_sweep")
     outdir.mkdir(parents=True, exist_ok=True)
     save_json(res, outdir / f"{cfg.tag}_triad_sweep.json")
@@ -227,6 +406,13 @@ def main():
     pr.add_argument("--elev", type=float, default=None, help="Initial elevation angle (deg)")
     pr.add_argument("--azim", type=float, default=None, help="Initial azimuth angle (deg)")
     pr.add_argument("--show", action="store_true", help="Open interactive window so you can drag to rotate")
+    pr.add_argument("--optim-mode", choices=["standard", "effective_mod"], help="Override optimization mode.")
+    pr.add_argument("--eff-floor-frac", type=float, help="Effective modulation floor fraction (alpha).")
+    pr.add_argument("--eff-floor-axes", choices=["shape", "color", "both"], help="Axes receiving the effective-mod floor.")
+    pr.add_argument("--eff-floor-baseline-pct", type=float,
+                    help="Percentile threshold on baseline |d(1)| used to select neurons for the floor.")
+    pr.add_argument("--print-eff-diagnostics", action="store_true",
+                    help="Print effective-modulation diagnostics (min/p5/median margins) if available.")
     pr.set_defaults(func=cmd_run)
 
     ps = sub.add_parser("sweep", help="Sweep constraint range and plot Δangle")
@@ -249,6 +435,13 @@ def main():
     pt.add_argument("--logratio", action="store_true",
                     help="Use log2 for the ratio plot (only sensible if gains are positive)")
     pt.add_argument("--paper-panels", action="store_true",help="Also produce panel_b (3D bivariate dots + axes) and panel_c (gain vs selectivity) with data")
+    pt.add_argument("--optim-mode", choices=["standard", "effective_mod"], help="Override optimization mode.")
+    pt.add_argument("--eff-floor-frac", type=float, help="Effective modulation floor fraction (alpha).")
+    pt.add_argument("--eff-floor-axes", choices=["shape", "color", "both"], help="Axes receiving the effective-mod floor.")
+    pt.add_argument("--eff-floor-baseline-pct", type=float,
+                    help="Percentile threshold on baseline |d(1)| used to select neurons for the floor.")
+    pt.add_argument("--print-eff-diagnostics", action="store_true",
+                    help="Print effective-modulation diagnostics (min/p5/median margins) if available.")
     pt.set_defaults(func=cmd_triad)
 
     
@@ -261,6 +454,15 @@ def main():
     pts.add_argument("--shuffle-mode", choices=["independent","paired"], help="Shuffle independently or as pairs")
     pts.add_argument("--shuffle-seed", type=int, help="Seed for shuffle RNG")
     pts.add_argument("--paper-panels", action="store_true",help="Also produce panel_d (cross-attend vs range with shuffled mean ± CI) with data")
+    pts.add_argument("--optim-mode", choices=["standard", "effective_mod"], help="Override optimization mode.")
+    pts.add_argument("--eff-floor-frac", type=float, help="Effective modulation floor fraction (alpha).")
+    pts.add_argument("--eff-floor-axes", choices=["shape", "color", "both"], help="Axes receiving the effective-mod floor.")
+    pts.add_argument("--eff-floor-baseline-pct", type=float,
+                     help="Percentile threshold on baseline |d(1)| used to select neurons for the floor.")
+    pts.add_argument("--print-eff-diagnostics", action="store_true",
+                     help="Print effective-modulation diagnostics (min/p5/median margins) if available.")
+    pts.add_argument("-y", "--yes", action="store_true",
+                     help="Skip interactive target preview and proceed immediately.")
     pts.set_defaults(func=cmd_triad_sweep)
 
 

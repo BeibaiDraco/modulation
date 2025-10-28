@@ -4,7 +4,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.linalg import lu_factor, lu_solve
 from sklearn.decomposition import PCA
-from .config import NetworkConfig, GridConfig, WRNormalization
+from .config import NetworkConfig, GridConfig, WRNormalization, GainMode
 
 def _rng(seed: int) -> np.random.Generator:
     return np.random.default_rng(seed)
@@ -12,7 +12,7 @@ def _rng(seed: int) -> np.random.Generator:
 class LinearRNN:
     """
     Linear recurrent population model with feedforward drive (W_F) and recurrent weights (W_R).
-    r = (I - W_R)^(-1) (diag(g) @ W_F @ s), s = [shape, color]^T.
+    Post-synaptic gains: y = (I - G W_R)^(-1) (G W_F s), G = diag(g).
     """
     def __init__(self, cfg: NetworkConfig) -> None:
         self.cfg = cfg
@@ -31,13 +31,8 @@ class LinearRNN:
         self.W_R = self._spectral_normalize(self.W_R, cfg.desired_radius)
 
         self.I = np.eye(self.N)
+        self._ones = np.ones(self.N, dtype=float)
         self._lu = lu_factor(self.I - self.W_R)  # pre-factor
-        self._wf_scales = np.ones(self.K, dtype=float)
-        if getattr(self.cfg, "baseline_equalize", False):
-            try:
-                self.equalize_feature_columns(target_norm=1.0)
-            except Exception as exc:
-                self._baseline_equalize_error = str(exc)
 
     # ---------- initialization ----------
     def _init_selectivity_matrix(self, N:int, K:int) -> NDArray[np.float64]:
@@ -117,27 +112,39 @@ class LinearRNN:
             W = W * (radius / rho)
         return W
 
-    def equalize_feature_columns(self, target_norm: float = 1.0) -> None:
-        """
-        Rescale W_F columns so baseline effective columns
-        M = (I - W_R)^(-1) W_F have comparable L2 norms.
-        """
-        M = lu_solve(self._lu, self.W_F)
-        norms = np.linalg.norm(M, axis=0) + 1e-12
-        scales = (target_norm / norms).astype(float)
-        self.W_F = self.W_F * scales[np.newaxis, :]
-        self._wf_scales = scales
-
-    # ---------- core computations ----------
-    def response(self, shape_val: float, color_val: float,
-                 g: Optional[NDArray[np.float64]] = None) -> NDArray[np.float64]:
+    def response(self, shape_val: float, color_val: float, g=None):
         if g is None:
-            g = np.ones(self.N)
+            g = self._ones
+        else:
+            g = np.asarray(g, dtype=float)
         stim = np.array([shape_val, color_val], dtype=float)
-        WFeff = (g[:, None] * self.W_F)
-        drive = WFeff @ stim
-        r = lu_solve(self._lu, drive)
-        return r
+
+        # IMPORTANT: do not use allclose; SLSQP perturbs g by ~1e-8.
+        # Only use the unmodulated fast path when g is exactly 1s.
+        if np.array_equal(g, self._ones):
+            drive = self.W_F @ stim
+            return lu_solve(self._lu, drive)
+
+        mode = getattr(self.cfg, "gain_mode", GainMode.BOTH)
+        if isinstance(mode, str):
+            mode = GainMode(mode.lower())
+
+        G_rows = g[:, None]
+
+        if mode is GainMode.FEEDFORWARD:
+            drive = (G_rows * self.W_F) @ stim
+            return lu_solve(self._lu, drive)
+
+        I_minus_GWR = self.I - (G_rows * self.W_R)
+        lu_temp = lu_factor(I_minus_GWR)
+
+        if mode is GainMode.RECURRENT:
+            drive = self.W_F @ stim
+        else:  # GainMode.BOTH
+            drive = (G_rows * self.W_F) @ stim
+
+        return lu_solve(lu_temp, drive)
+
 
     def grid_responses(self, grid: GridConfig, g: Optional[NDArray[np.float64]] = None) -> NDArray[np.float64]:
         Rs = []

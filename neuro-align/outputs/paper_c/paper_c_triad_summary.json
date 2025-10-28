@@ -1,0 +1,212 @@
+{
+  "pca": {
+    "explained_variance_ratio": [
+      0.5350450294322389,
+      0.46495497056776125,
+      4.2207610625191885e-31
+    ]
+  },
+  "to_target": {
+    "color_axis": {
+      "under_color_deg": 9.858550693583286,
+      "under_shape_deg": 13.790002551188039,
+      "improvement_deg": 3.9314518576047526
+    },
+    "shape_axis": {
+      "under_shape_deg": 69.84304384904966,
+      "under_color_deg": 76.03936083654442,
+      "improvement_deg": 6.196316987494754
+    }
+  },
+  "unmod": {
+    "color_axis_norm": 6.72884145542773,
+    "shape_axis_norm": 7.072006307737727
+  },
+  "color_alignment": {
+    "solver": "SLSQP",
+    "final_objective": -0.970684944098375,
+    "success": true,
+    "status": 0,
+    "message": "Optimization terminated successfully",
+    "iterations": 26,
+    "func_evals": 2626,
+    "grad_evals": 26,
+    "angles_deg": {
+      "unmod_to_target": 14.72979941295662,
+      "opt_to_target": 9.858550693583286,
+      "delta_opt_vs_unmod": 6.907023950260982,
+      "improvement": 4.871248719373334
+    },
+    "axis_norms": {
+      "pre": 6.72884145542773,
+      "post": 7.471181190606738,
+      "equality_residual": null
+    },
+    "g_stats": {
+      "min": 0.8837665798574099,
+      "max": 1.1851897217984033,
+      "mean": 1.0155688504341627,
+      "std": 0.05794489518960525,
+      "l2_norm_g_minus_1": 0.599999998531305,
+      "linf_norm_g_minus_1": 0.18518972179840332
+    },
+    "constraint_residuals": {
+      "ball": {
+        "R_fraction": 0.06,
+        "R_absolute": 0.6,
+        "residual_l2": 1.468694943440596e-09,
+        "residual_sq": 1.7624339765376362e-09
+      }
+    }
+  },
+  "shape_alignment": {
+    "solver": "SLSQP",
+    "final_objective": -0.11874437167666328,
+    "success": true,
+    "status": 0,
+    "message": "Optimization terminated successfully",
+    "iterations": 13,
+    "func_evals": 1315,
+    "grad_evals": 13,
+    "angles_deg": {
+      "unmod_to_target": 79.00592412598785,
+      "opt_to_target": 69.84304384904966,
+      "delta_opt_vs_unmod": 14.463437272616432,
+      "improvement": 9.162880276938182
+    },
+    "axis_norms": {
+      "pre": 7.072006307737727,
+      "post": 8.508276673656608,
+      "equality_residual": null
+    },
+    "g_stats": {
+      "min": 0.8962652587731033,
+      "max": 1.2451923435999372,
+      "mean": 1.016901464213693,
+      "std": 0.0575703092428164,
+      "l2_norm_g_minus_1": 0.5999999999066887,
+      "linf_norm_g_minus_1": 0.24519234359993725
+    },
+    "constraint_residuals": {
+      "ball": {
+        "R_fraction": 0.06,
+        "R_absolute": 0.6,
+        "residual_l2": 9.331124761757792e-11,
+        "residual_sq": 1.1197348603886326e-10
+      }
+    }
+  },
+  "gain_comparison": {
+    "ratio_color_over_shape": {
+      "min": 0.8623115038952616,
+      "max": 1.1546758274813473,
+      "mean": 1.0008198477718846,
+      "median": 1.0031225392014045,
+      "std": 0.06685826104303019
+    },
+    "diff_color_minus_shape": {
+      "min": -0.14111430815738335,
+      "max": 0.14732584099972879,
+      "mean": -0.001332613779530758,
+      "median": 0.003091110175254319,
+      "std": 0.06805371307614279
+    }
+  },
+  "cfg": {
+    "network": {
+      "N": 100,
+      "K": 2,
+      "seed": 21,
+      "desired_radius": 0.8,
+      "p_high": 0.2,
+      "p_low": 0.2,
+      "zero_sum": "row",
+      "wr_tuned": false,
+      "weight_scale": 0.1,
+      "baseline_equalize": false,
+      "gain_mode": "both"
+    },
+    "objective": {
+      "target_type": "custom_pc",
+      "theta_deg": 80,
+      "phi_deg": 5.0,
+      "axis_of_interest": "color",
+      "shape_for_color_line": 0.3,
+      "color_for_shape_line": 0.6,
+      "custom_stim_line_start": null,
+      "custom_stim_line_end": null
+    },
+    "constraints": {
+      "type": "ball",
+      "radius": 0.06,
+      "box_half_width": 0.2,
+      "hard_norm": false,
+      "positive_gains": false
+    },
+    "grid": {
+      "shape_vals": [
+        0.0,
+        0.167,
+        0.333,
+        0.5,
+        0.667,
+        0.833,
+        1.0
+      ],
+      "color_vals": [
+        0.0,
+        0.167,
+        0.333,
+        0.5,
+        0.667,
+        0.833,
+        1.0
+      ]
+    },
+    "tag": "paper_c"
+  },
+  "cross_attend": {
+    "color_axis_angle_deg": 6.398334371588829,
+    "shape_axis_angle_deg": 10.577458998548614,
+    "shuffle": {
+      "mode": "paired",
+      "num_bins": 10,
+      "binning": "equal",
+      "seed": 2021,
+      "cross_attend": {
+        "color_axis_angle_deg": 5.334811651755357,
+        "shape_axis_angle_deg": 6.027983823922417
+      },
+      "axis_norms": {
+        "color_axis": {
+          "under_color_attend_shuf": 6.8916270145424265,
+          "under_shape_attend_shuf": 6.7738824316232975
+        },
+        "shape_axis": {
+          "under_color_attend_shuf": 7.165501938880267,
+          "under_shape_attend_shuf": 7.57589765781433
+        }
+      },
+      "to_target": {
+        "color_axis": {
+          "under_color_deg": 14.962322556367894,
+          "under_shape_deg": 15.120911348779797,
+          "improvement_deg": 0.15858879241190316
+        },
+        "shape_axis": {
+          "under_shape_deg": 75.970612162504,
+          "under_color_deg": 78.67826428259377,
+          "improvement_deg": 2.707652120089776
+        }
+      }
+    },
+    "color_axis_norms": {
+      "under_color_attend": 7.471181190606738,
+      "under_shape_attend": 7.0174305957379595
+    },
+    "shape_axis_norms": {
+      "under_color_attend": 7.567970288246,
+      "under_shape_attend": 8.508276673656608
+    }
+  }
+}
