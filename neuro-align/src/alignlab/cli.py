@@ -6,7 +6,7 @@ from .config import (
     ExperimentConfig, NetworkConfig, ObjectiveConfig, ConstraintConfig,
     GridConfig, ConstraintType, OptimizationMode
 )
-from .optimize import optimize_once, sweep_range_vs_degree, save_json, optimize_triad, triad_sweep, baseline_axis_pc_angles
+from .optimize import optimize_once, sweep_range_vs_degree, save_weight_matrices, save_json, optimize_triad, triad_sweep, baseline_axis_pc_angles
 from .plotting import (
     plot_original_two_panel, plot_embedding_3d,
     plot_range_vs_degree, plot_gains_vs_selectivity,
@@ -219,7 +219,8 @@ def cmd_triad(args):
     outdir = Path(cfg.save_dir) / cfg.tag
     outdir.mkdir(parents=True, exist_ok=True)
     save_json(summary, outdir / f"{cfg.tag}_triad_summary.json")
-
+    save_weight_matrices(net, target, outdir, cfg.tag)
+    
     # 3-panel plot
     plot_triad_three_panel(
         Z_unmod=Z0, Z_color=Zc, Z_shape=Zs,

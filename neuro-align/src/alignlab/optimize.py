@@ -731,6 +731,39 @@ def sweep_range_vs_degree(cfg: ExperimentConfig, ranges: List[float]) -> Dict:
         "tag": cfg.tag
     }
 
+
+def save_weight_matrices(net, target_vec_neuron, outdir: Path, tag: str) -> dict:
+    """
+    Save W_F (N x K), W_R (N x N), and the readout/target axis t (N,)
+    into <outdir>/ as NPZ, plus individual NPY/CSV files for convenience.
+    """
+    _ensure_dir(outdir)
+    paths = {}
+
+    # Bundle everything
+    np.savez(outdir / f"{tag}_weights_readout.npz",
+             W_F=net.W_F, W_R=net.W_R, readout=target_vec_neuron)
+    paths["npz"] = str(outdir / f"{tag}_weights_readout.npz")
+
+    # Also save separate files (easy to inspect)
+    np.save(outdir / f"{tag}_W_F.npy", net.W_F)
+    np.save(outdir / f"{tag}_W_R.npy", net.W_R)
+    np.save(outdir / f"{tag}_readout.npy", target_vec_neuron)
+
+    np.savetxt(outdir / f"{tag}_W_F.csv", net.W_F, delimiter=",", fmt="%.6g")
+    np.savetxt(outdir / f"{tag}_W_R.csv", net.W_R, delimiter=",", fmt="%.6g")
+    np.savetxt(outdir / f"{tag}_readout.csv", target_vec_neuron.reshape(1, -1), delimiter=",", fmt="%.6g")
+
+    meta = {
+        "W_F_shape": list(net.W_F.shape),
+        "W_R_shape": list(net.W_R.shape),
+        "readout_shape": [int(target_vec_neuron.size)],
+        "tag": tag,
+    }
+    save_json(meta, outdir / f"{tag}_weights_readout_meta.json")
+    return paths
+
+
 def save_json(obj: dict, path: Path) -> None:
     _ensure_dir(path.parent)
     with open(path, "w", encoding="utf-8") as f:
