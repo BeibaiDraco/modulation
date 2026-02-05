@@ -1,0 +1,3 @@
+metric,color_improvement_deg,shape_improvement_deg,num_outliers_patched
+original,5.163010,7.268331,0
+patched,4.746496,7.225307,3

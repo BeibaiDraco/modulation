@@ -53,17 +53,30 @@ neuro-align/
 
 ## 3) Quickstart (paper replication)
 
-We provide a ready‑to‑run paper config: **`configs/paper.yaml`**. It defines the network, target, constraints, grid, shuffle, and default sweep ranges. 
+We provide three ready‑to‑run paper configs:
 
-> **No `--zlim` needed by default**. You can still pass `--elev/--azim` if you want a specific view.
+| Config | Purpose | Constraint |
+|--------|---------|------------|
+| `configs/paper_panel_b.yaml` | Panel B (3D embedding) | radius=0.5 |
+| `configs/paper_panel_c.yaml` | Panel C (gain analysis) | radius=0.06 |
+| `configs/paper_panel_d.yaml` | Panel D (sweep) | varies |
+
+> **Note on reproducibility**: The network generation is fully deterministic (same seed → identical weights). However, the SciPy SLSQP optimizer and PCA eigenvector computation are sensitive to library versions. Re-running with different NumPy/SciPy versions may produce **quantitatively different** gains and PC coordinates, but the **qualitative properties** (e.g., gain patterns correlating with selectivity, improvement trends) remain the same.
 
 ### A) Triad (produces the 3‑panel figure + **panel_b** and **panel_c**)
 
 ```bash
+# For Panel B visualization (larger gain modulation)
 python -m alignlab.cli triad \
-  --config configs/paper.yaml \
+  --config configs/paper_panel_b.yaml \
   --paper-panels \
   --elev 25 --azim 135 \
+  --show
+
+# For Panel C gain analysis (smaller, more realistic modulation)
+python -m alignlab.cli triad \
+  --config configs/paper_panel_c.yaml \
+  --paper-panels \
   --show
 ```
 
@@ -83,9 +96,11 @@ python -m alignlab.cli triad \
 
 ```bash
 python -m alignlab.cli triad-sweep \
-  --config configs/paper.yaml \
+  --config configs/paper_panel_d.yaml \
   --paper-panels
 ```
+
+> This sweep runs optimization across multiple constraint radii with shuffle tests, which may take several minutes.
 
 **Outputs** (in `outputs/<tag>_triad_sweep/`):
 
@@ -162,7 +177,7 @@ The script includes descriptions of what each panel shows for readers.
 
 ## 6) Configuration guide
 
-Use `configs/paper.yaml` as a template for your experiments. Highlights: 
+Use `configs/paper_panel_b.yaml`, `configs/paper_panel_c.yaml`, or `configs/paper_panel_d.yaml` as templates for your experiments. Highlights: 
 
 ```yaml
 tag: paper
@@ -254,11 +269,22 @@ python -m alignlab.cli triad-sweep --config <cfg.yaml> [--paper-panels]
 
 ## 8) Reproducibility
 
-* **Determinism**:
+* **What IS deterministic**:
+  * `network.seed` controls network weight initialization (W_F, W_R) — **fully reproducible**
+  * `shuffle.seed` (or default = `network.seed + 101`) controls shuffling permutations
+  * PCA is **always fitted on unmodulated responses** and reused for all projections
 
-  * `network.seed` controls network initialization, PCA, etc.
-  * `shuffle.seed` (or default = `network.seed + 101`) controls shuffling.
-* PCA is **always fitted on unmodulated responses** and reused for all projections in a run (no basis mismatch).
+* **What MAY vary across environments**:
+  * **Optimized gains**: SciPy's SLSQP optimizer is sensitive to numerical precision differences between library versions. Different NumPy/SciPy versions may converge to different (but equally valid) local optima.
+  * **PCA eigenvectors**: When eigenvalues are similar, eigenvector orientation can vary slightly across NumPy versions.
+
+* **Qualitative properties are preserved**: Despite numerical differences, the key scientific findings remain consistent:
+  * Gain patterns correlate with neuron selectivity
+  * "Own" attention improves axis alignment to target
+  * Improvement increases with constraint radius
+
+* **For exact figure reproduction**: Use the saved CSV/JSON files in `figs_data/` with `reproduce_all_paper_figures.py` to regenerate figures without re-running optimization.
+
 * All figures are saved as **PNG (300 dpi)** and **vector PDF/SVG**.
 
 ---

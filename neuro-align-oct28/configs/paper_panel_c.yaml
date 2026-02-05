@@ -1,0 +1,73 @@
+tag: paper_c
+save_dir: outputs
+
+
+network:
+  N: 100
+  K: 2
+  seed: 21
+  desired_radius: 0.8
+  p_high: 0.2
+  p_low: 0.2
+  zero_sum: row        # small PC1 regime (toggle to "none" for dominant PC1) or row
+  wr_tuned: false
+  weight_scale: 0.1
+  baseline_equalize: false
+  gain_mode: both  # one of: feedforward | recurrent | both
+
+
+objective:
+  target_type: custom_pc
+  theta_deg: 80
+  phi_deg: 5.0
+  axis_of_interest: color
+  shape_for_color_line: 0.3
+  color_for_shape_line: 0.6
+
+constraints:
+  type: ball
+  radius: 0.06          # back to your original
+  hard_norm: false     # OFF (no axis-length locking)
+  positive_gains: false # OFF (allow sign if your model wants it)
+  # box_half_width: 0.12  # ignored for type=ball
+
+optimization:
+  mode: standard
+
+  # Keep your original modest floor settings (not a hard feature; just affects ratios)
+  activity_floor_frac: 0.1
+  activity_floor_axes: shape
+  activity_floor_baseline_percentile: 10.0
+
+  # --- Soft penalties OFF ---
+  lambda_activity_modesty: 0.0
+  activity_huber_delta: 0.15     # value ignored since lambda=0
+  lambda_resolvent: 0.0
+
+  # --- New hard features OFF ---
+  smin_floor: 0.0                # OFF (no hard σ_min constraint)
+  freeze_topq_risky: 0.0         # OFF (don’t freeze any neurons)
+  protect_activity_eps: 0.0      # OFF (no hard cap on activity-derived gains)
+  protect_activity_quantile: 1.0 # irrelevant when eps=0
+
+shuffle:
+  enabled: true
+  num_bins: 10
+  binning: equal
+  mode: paired
+  seed: 2021
+  repeats: 50
+
+grid:
+  shape_vals: [0.0, 0.167, 0.333, 0.5, 0.667, 0.833, 1.0]
+  color_vals: [0.0, 0.167, 0.333, 0.5, 0.667, 0.833, 1.0]
+
+normalization:
+  enabled: false
+  sigma: 0.2
+  kappa: 1.0
+  pool: global
+
+sweep:
+  ranges_ball: [0.02, 0.04, 0.06, 0.08, 0.10, 0.14, 0.18, 0.22, 0.26, 0.30, 0.34, 0.40, 0.4641]
+  ranges_box:  [0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20]
